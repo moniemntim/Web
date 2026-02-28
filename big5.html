@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>中文 → Big5（Hex）</title>
+  <style>
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",sans-serif; margin:24px; line-height:1.5}
+    .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center}
+    textarea{width:100%; min-height:140px; padding:10px; font-size:16px}
+    button{padding:10px 14px; font-size:14px; cursor:pointer}
+    select{padding:8px}
+    pre{background:#f6f8fa; padding:12px; overflow:auto; white-space:pre-wrap; word-break:break-word}
+    .hint{color:#555; font-size:13px}
+    .box{border:1px solid #ddd; border-radius:10px; padding:14px; margin-top:14px}
+    .warn{color:#b00020; font-weight:600}
+  </style>
+</head>
+<body>
+  <h2>中文 → Big5（Hex）</h2>
+  <div class="hint">
+    不用上傳檔案；文字只在你的瀏覽器內轉換。輸出不含 %XX。<br/>
+    「每字分組」可解決多字時看起來黏在一起的問題。
+  </div>
+
+  <div class="box">
+    <div class="row">
+      <label>編碼：</label>
+      <select id="enc">
+        <option value="big5">big5</option>
+        <option value="big5-hkscs">big5-hkscs</option>
+      </select>
+
+      <label style="margin-left:auto">
+        <input type="checkbox" id="alsoWhole" checked />
+        也輸出整段 bytes（方便複製）
+      </label>
+
+      <button id="btn">轉換</button>
+      <button id="btnClear">清空</button>
+    </div>
+
+    <div style="margin-top:10px">
+      <textarea id="inp" placeholder="在這裡輸入中文，例如：你好世界"></textarea>
+    </div>
+  </div>
+
+  <div class="box">
+    <div id="err" class="warn" style="display:none"></div>
+
+    <h3 style="margin:10px 0 6px">每字一組（建議）</h3>
+    <pre id="outGrouped">（尚未轉換）</pre>
+
+    <h3 style="margin:10px 0 6px">逐字對照（看得最清楚）</h3>
+    <pre id="outMap">（尚未轉換）</pre>
+
+    <div id="wholeWrap" style="display:none">
+      <h3 style="margin:10px 0 6px">整段 bytes（空格分隔）</h3>
+      <pre id="outWhole"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    // 前端 Big5 編碼：使用 @kayahr/text-encoding（支援 big5 與 big5-hkscs）
+    import { TextEncoder } from "https://esm.sh/@kayahr/text-encoding@2.1.0";
+
+    const $ = (id) => document.getElementById(id);
+
+    function toHex2(b){
+      return b.toString(16).toUpperCase().padStart(2, "0");
+    }
+    function bytesToHexSpaced(u8){
+      return Array.from(u8, toHex2).join(" ");
+    }
+    function bytesToHexJoined(u8){
+      return Array.from(u8, toHex2).join("");
+    }
+
+    function convert(){
+      const encName = $("enc").value;
+      const text = $("inp").value ?? "";
+      const alsoWhole = $("alsoWhole").checked;
+
+      $("err").style.display = "none";
+      $("wholeWrap").style.display = alsoWhole ? "block" : "none";
+
+      let encoder;
+      try{
+        encoder = new TextEncoder(encName);
+      }catch(e){
+        $("err").textContent = "無法建立編碼器：" + String(e?.message ?? e);
+        $("err").style.display = "block";
+        return;
+      }
+
+      // 每字一組（例如：你=A7DA，好=A66E → A7DA A66E）
+      const grouped = [];
+      const mapLines = [];
+
+      for (const ch of Array.from(text)) {
+        try{
+          const u8 = encoder.encode(ch);
+          const joined = bytesToHexJoined(u8);
+          const spaced = bytesToHexSpaced(u8);
+
+          grouped.push(joined);
+          mapLines.push(`${ch}  →  ${joined}${joined !== spaced ? `  (${spaced})` : ""}`);
+        }catch(e){
+          grouped.push("??");
+          mapLines.push(`${ch}  →  ??  （此字在 ${encName} 可能無法表示）`);
+        }
+      }
+
+      $("outGrouped").textContent = grouped.join(" ");
+      $("outMap").textContent = mapLines.join("\n");
+
+      if (alsoWhole){
+        try{
+          const whole = encoder.encode(text);
+          $("outWhole").textContent = bytesToHexSpaced(whole);
+        }catch(e){
+          $("outWhole").textContent = "（整段轉換失敗）" + String(e?.message ?? e);
+        }
+      }
+    }
+
+    $("btn").addEventListener("click", convert);
+    $("btnClear").addEventListener("click", () => {
+      $("inp").value = "";
+      $("outGrouped").textContent = "（尚未轉換）";
+      $("outMap").textContent = "（尚未轉換）";
+      $("outWhole").textContent = "";
+      $("err").style.display = "none";
+    });
+
+    // Ctrl+Enter 快速轉換
+    $("inp").addEventListener("keydown", (e) => {
+      if (e.ctrlKey && e.key === "Enter") convert();
+    });
+  </script>
+</body>
+</html>
