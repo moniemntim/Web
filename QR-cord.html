@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR Code 產生器</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #faf4df;
+      --bg-2: #f7d4ae;
+      --surface: #fff9ef;
+      --ink: #20140d;
+      --ink-soft: #5f4b3d;
+      --accent: #cf3d1e;
+      --accent-strong: #9d2a11;
+      --border: #e7c7aa;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 700px at 10% 10%, rgba(255, 255, 255, 0.65), transparent 60%),
+        radial-gradient(900px 600px at 95% 90%, rgba(207, 61, 30, 0.16), transparent 65%),
+        linear-gradient(145deg, var(--bg-1), var(--bg-2));
+      font-family: "Noto Sans TC", sans-serif;
+    }
+
+    .card {
+      width: min(920px, 100%);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+      padding: 22px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 249, 239, 0.97), rgba(255, 245, 233, 0.94));
+      border: 1px solid var(--border);
+      box-shadow: 0 16px 40px rgba(90, 37, 18, 0.2);
+      backdrop-filter: blur(6px);
+    }
+
+    .title {
+      margin: 0 0 8px;
+      font: 700 2rem/1.1 "Space Grotesk", sans-serif;
+      letter-spacing: 0.4px;
+      color: var(--accent-strong);
+    }
+
+    .subtitle {
+      margin: 0 0 14px;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 600;
+      font-size: 0.92rem;
+    }
+
+    textarea,
+    select,
+    input[type="color"] {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: #fffdf7;
+      color: var(--ink);
+      outline: none;
+      font-family: "Noto Sans TC", sans-serif;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    textarea:focus,
+    select:focus,
+    input[type="color"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(207, 61, 30, 0.15);
+    }
+
+    textarea {
+      min-height: 132px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 10px 18px;
+      font-weight: 700;
+      font-family: "Space Grotesk", "Noto Sans TC", sans-serif;
+      cursor: pointer;
+      transition: transform 0.12s ease, filter 0.15s ease, opacity 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.05);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+      filter: none;
+    }
+
+    .primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .ghost {
+      background: #ffecdf;
+      color: var(--accent-strong);
+      border: 1px solid #f0b893;
+    }
+
+    .preview {
+      border: 1px dashed #d9ac8b;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #fffdf8, #fff5eb);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+      justify-items: center;
+      min-height: 380px;
+    }
+
+    .preview-title {
+      justify-self: start;
+      margin: 0;
+      font: 700 1rem/1.2 "Space Grotesk", "Noto Sans TC", sans-serif;
+      color: var(--accent-strong);
+    }
+
+    #qrArea {
+      width: 100%;
+      min-height: 300px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background:
+        linear-gradient(45deg, rgba(201, 148, 104, 0.12) 25%, transparent 25%, transparent 75%, rgba(201, 148, 104, 0.12) 75%, rgba(201, 148, 104, 0.12)),
+        linear-gradient(45deg, rgba(201, 148, 104, 0.12) 25%, transparent 25%, transparent 75%, rgba(201, 148, 104, 0.12) 75%, rgba(201, 148, 104, 0.12));
+      background-size: 28px 28px;
+      background-position: 0 0, 14px 14px;
+      padding: 14px;
+    }
+
+    #qrArea canvas,
+    #qrArea img {
+      border-radius: 8px;
+      box-shadow: 0 10px 22px rgba(74, 32, 16, 0.22);
+      background: #fff;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .status {
+      margin: 0;
+      min-height: 1.3rem;
+      font-size: 0.9rem;
+      color: #4f3a2c;
+      justify-self: start;
+    }
+
+    .status.error {
+      color: #a10f0f;
+    }
+
+    @media (max-width: 820px) {
+      .card {
+        grid-template-columns: 1fr;
+      }
+      .title {
+        font-size: 1.7rem;
+      }
+      .preview {
+        min-height: 320px;
+      }
+      #qrArea {
+        min-height: 260px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <section>
+      <h1 class="title">QR Code 產生器</h1>
+      <p class="subtitle">輸入文字或網址，立即生成 QR Code，並可下載為 PNG。</p>
+
+      <label for="qrText">內容</label>
+      <textarea id="qrText" placeholder="例如：https://example.com">https://example.com</textarea>
+
+      <div class="row">
+        <div>
+          <label for="qrSize">尺寸</label>
+          <select id="qrSize">
+            <option value="180">180 x 180</option>
+            <option value="256" selected>256 x 256</option>
+            <option value="320">320 x 320</option>
+            <option value="420">420 x 420</option>
+          </select>
+        </div>
+        <div>
+          <label for="qrEcc">容錯等級</label>
+          <select id="qrEcc">
+            <option value="L">L (7%)</option>
+            <option value="M" selected>M (15%)</option>
+            <option value="Q">Q (25%)</option>
+            <option value="H">H (30%)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="fgColor">前景色</label>
+          <input type="color" id="fgColor" value="#111111">
+        </div>
+        <div>
+          <label for="bgColor">背景色</label>
+          <input type="color" id="bgColor" value="#ffffff">
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="generateBtn" class="primary" type="button">產生 QR Code</button>
+        <button id="downloadBtn" class="ghost" type="button" disabled>下載 PNG</button>
+      </div>
+    </section>
+
+    <section class="preview">
+      <h2 class="preview-title">預覽</h2>
+      <div id="qrArea" aria-live="polite"></div>
+      <p id="status" class="status">等待輸入內容...</p>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    const textInput = document.getElementById("qrText");
+    const sizeSelect = document.getElementById("qrSize");
+    const eccSelect = document.getElementById("qrEcc");
+    const fgColorInput = document.getElementById("fgColor");
+    const bgColorInput = document.getElementById("bgColor");
+    const generateBtn = document.getElementById("generateBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const qrArea = document.getElementById("qrArea");
+    const statusEl = document.getElementById("status");
+
+    let debounceTimer = null;
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.className = isError ? "status error" : "status";
+    }
+
+    function clearQrArea() {
+      while (qrArea.firstChild) {
+        qrArea.removeChild(qrArea.firstChild);
+      }
+    }
+
+    function hasQrResult() {
+      return Boolean(qrArea.querySelector("canvas, img"));
+    }
+
+    function buildQr() {
+      if (typeof QRCode === "undefined") {
+        setStatus("無法載入 QRCode 函式庫，請確認網路連線。", true);
+        generateBtn.disabled = true;
+        downloadBtn.disabled = true;
+        return;
+      }
+
+      const content = textInput.value.trim();
+      if (!content) {
+        clearQrArea();
+        downloadBtn.disabled = true;
+        setStatus("請先輸入文字或網址。", true);
+        return;
+      }
+
+      clearQrArea();
+
+      new QRCode(qrArea, {
+        text: content,
+        width: Number(sizeSelect.value),
+        height: Number(sizeSelect.value),
+        colorDark: fgColorInput.value,
+        colorLight: bgColorInput.value,
+        correctLevel: QRCode.CorrectLevel[eccSelect.value] || QRCode.CorrectLevel.M
+      });
+
+      requestAnimationFrame(() => {
+        downloadBtn.disabled = !hasQrResult();
+      });
+      setStatus("QR Code 已更新。");
+    }
+
+    function downloadPng() {
+      const canvas = qrArea.querySelector("canvas");
+      if (canvas) {
+        const link = document.createElement("a");
+        link.download = "qrcode.png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        return;
+      }
+
+      const img = qrArea.querySelector("img");
+      if (!img || !img.src) {
+        setStatus("沒有可下載的 QR Code。", true);
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.download = "qrcode.png";
+      link.href = img.src;
+      link.click();
+    }
+
+    generateBtn.addEventListener("click", buildQr);
+    downloadBtn.addEventListener("click", downloadPng);
+
+    textInput.addEventListener("input", () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(buildQr, 250);
+    });
+
+    [sizeSelect, eccSelect, fgColorInput, bgColorInput].forEach((el) => {
+      el.addEventListener("change", buildQr);
+    });
+
+    buildQr();
+  </script>
+</body>
+</html>
