@@ -133,10 +133,19 @@
       $("err").style.display = "none";
     });
 
-    // Ctrl+Enter 快速轉換
+    // Ctrl/Cmd+Enter 快速轉換
     $("inp").addEventListener("keydown", (e) => {
-      if (e.ctrlKey && e.key === "Enter") convert();
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") convert();
     });
+  </script>
+
+  <script nomodule>
+    (function(){
+      var err = document.getElementById("err");
+      if (!err) return;
+      err.style.display = "block";
+      err.textContent = "你的 iOS / Safari 版本太舊，無法載入必要模組。請升級系統或改用較新的瀏覽器。";
+    })();
   </script>
 </body>
 </html>
