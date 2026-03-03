@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
@@ -63,12 +63,96 @@
       line-height: 1.35;
       user-select: none;
     }
+
+    .control-pad {
+      width: min(94vw, 760px);
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-auto-rows: 50px;
+      gap: 8px;
+      user-select: none;
+      touch-action: manipulation;
+    }
+
+    .pad-btn {
+      height: 50px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      background: linear-gradient(180deg, rgba(55, 61, 70, 0.95), rgba(32, 36, 42, 0.95));
+      color: #f8fbff;
+      font: 700 21px/1 "Segoe UI", "Microsoft JhengHei", sans-serif;
+      cursor: pointer;
+      outline: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .pad-btn.active,
+    .pad-btn:active {
+      transform: translateY(1px);
+      filter: brightness(1.2);
+      border-color: rgba(255, 255, 255, 0.48);
+    }
+
+    .pad-down {
+      grid-column: 3 / span 1;
+      grid-row: 1;
+    }
+
+    .pad-left {
+      grid-column: 1 / span 2;
+      grid-row: 1;
+    }
+
+    .pad-c {
+      grid-column: 4 / span 1;
+      grid-row: 1;
+      font-size: 19px;
+    }
+
+    .pad-right {
+      grid-column: 6 / span 2;
+      grid-row: 1;
+    }
+
+    .pad-up {
+      grid-column: 5 / span 1;
+      grid-row: 1;
+    }
+
+    .pad-hard {
+      grid-column: 4 / span 1;
+      grid-row: 2;
+      font-size: 14px;
+    }
+
+    @media (max-width: 720px) {
+      .pad-btn {
+        height: 46px;
+        font-size: 18px;
+      }
+
+      .pad-c {
+        font-size: 17px;
+      }
+
+      .pad-hard {
+        font-size: 12px;
+      }
+    }
   </style>
 </head>
 <body>
   <main class="shell">
     <canvas id="game" width="660" height="660" tabindex="0" aria-label="Tetris 遊戲畫布"></canvas>
-    <div class="hint">電腦：方向鍵控制。手機：滑動/按住/雙擊操作。F 切換全螢幕，Esc 可退出全螢幕。</div>
+    <div class="control-pad" aria-label="底部按鍵">
+      <button id="pad-left" class="pad-btn pad-left" type="button" aria-label="左鍵">←</button>
+      <button id="pad-down" class="pad-btn pad-down" type="button" aria-label="下鍵">↓</button>
+      <button id="pad-c" class="pad-btn pad-c" type="button" aria-label="C鍵">C</button>
+      <button id="pad-up" class="pad-btn pad-up" type="button" aria-label="上鍵">↑</button>
+      <button id="pad-right" class="pad-btn pad-right" type="button" aria-label="右鍵">→</button>
+      <button id="pad-hard" class="pad-btn pad-hard" type="button" aria-label="放置到底">到底</button>
+    </div>
+    <div class="hint">電腦：方向鍵控制。手機：可用下方按鍵或滑動/按住/雙擊。F 切換全螢幕，Esc 可退出全螢幕。</div>
   </main>
 
   <script>
@@ -137,6 +221,12 @@
 
       const canvas = document.getElementById("game");
       const ctx = canvas.getContext("2d", { alpha: false });
+      const padDown = document.getElementById("pad-down");
+      const padLeft = document.getElementById("pad-left");
+      const padC = document.getElementById("pad-c");
+      const padRight = document.getElementById("pad-right");
+      const padUp = document.getElementById("pad-up");
+      const padHard = document.getElementById("pad-hard");
 
       let state = null;
       let animationHandle = 0;
@@ -536,6 +626,98 @@
 
       function stopSoftDrop() {
         state.fastDrop = false;
+      }
+
+      function virtualEvent(key, code = key, repeat = false) {
+        return {
+          key,
+          code,
+          repeat,
+          preventDefault() {},
+        };
+      }
+
+      function triggerVirtualKeyDown(key, code = key) {
+        handleKeyDown(virtualEvent(key, code, false));
+      }
+
+      function triggerVirtualKeyUp(key, code = key) {
+        handleKeyUp(virtualEvent(key, code, false));
+      }
+
+      function bindPadHoldButton(button, key, code = key) {
+        if (!button) {
+          return;
+        }
+
+        let pressed = false;
+
+        const release = (event) => {
+          if (!pressed) {
+            return;
+          }
+          if (event) {
+            event.preventDefault();
+          }
+          pressed = false;
+          button.classList.remove("active");
+          triggerVirtualKeyUp(key, code);
+        };
+
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          canvas.focus();
+          if (pressed) {
+            return;
+          }
+          pressed = true;
+          button.classList.add("active");
+          triggerVirtualKeyDown(key, code);
+          if (button.setPointerCapture) {
+            button.setPointerCapture(event.pointerId);
+          }
+        });
+
+        button.addEventListener("pointerup", release);
+        button.addEventListener("pointercancel", release);
+        button.addEventListener("lostpointercapture", release);
+        window.addEventListener("blur", release);
+      }
+
+      function bindPadTapButton(button, key, code = key) {
+        if (!button) {
+          return;
+        }
+
+        const clearActive = (event) => {
+          if (event) {
+            event.preventDefault();
+          }
+          button.classList.remove("active");
+        };
+
+        button.addEventListener("pointerdown", (event) => {
+          event.preventDefault();
+          canvas.focus();
+          button.classList.add("active");
+          triggerVirtualKeyDown(key, code);
+          if (button.setPointerCapture) {
+            button.setPointerCapture(event.pointerId);
+          }
+        });
+
+        button.addEventListener("pointerup", clearActive);
+        button.addEventListener("pointercancel", clearActive);
+        button.addEventListener("lostpointercapture", clearActive);
+      }
+
+      function bindBottomButtons() {
+        bindPadHoldButton(padLeft, "ArrowLeft");
+        bindPadHoldButton(padRight, "ArrowRight");
+        bindPadHoldButton(padDown, "ArrowDown");
+        bindPadTapButton(padUp, "ArrowUp");
+        bindPadTapButton(padC, "c");
+        bindPadTapButton(padHard, " ", "Space");
       }
 
       function handleKeyDown(event) {
@@ -1161,6 +1343,7 @@
         canvas.addEventListener("keydown", handleKeyDown);
         canvas.addEventListener("keyup", handleKeyUp);
         canvas.addEventListener("click", () => canvas.focus());
+        bindBottomButtons();
 
         if (isMobileClient) {
           bindMobileTouchControls();
