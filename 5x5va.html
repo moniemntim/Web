@@ -1,0 +1,1459 @@
+﻿<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>五子棋 25x25 - Web</title>
+  <style>
+    :root {
+      --bg-a: #efe6d2;
+      --bg-b: #ceb690;
+      --panel: rgba(255, 251, 244, 0.88);
+      --text: #2b2014;
+      --line: #5b3a1e;
+      --board: #f3d79e;
+      --accent: #1f5fbf;
+      --warn: #9f2b2b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      background:
+        radial-gradient(1200px 720px at 10% 10%, rgba(255, 255, 255, 0.58), transparent 60%),
+        radial-gradient(900px 700px at 90% 85%, rgba(120, 78, 24, 0.22), transparent 70%),
+        linear-gradient(145deg, var(--bg-a), var(--bg-b));
+      font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      color: var(--text);
+    }
+
+    .app {
+      width: min(100%, 980px);
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 18px;
+      background: var(--panel);
+      border: 1px solid rgba(125, 85, 40, 0.3);
+      box-shadow: 0 18px 42px rgba(70, 46, 20, 0.25);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button,
+    select {
+      border: 1px solid #8f6a45;
+      border-radius: 9px;
+      background: #fff;
+      color: #2b2014;
+      font: 600 14px/1 "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      padding: 8px 12px;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      filter: brightness(0.97);
+    }
+
+    .ghost {
+      background: #f4ece2;
+    }
+
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    #statusText {
+      flex: 1;
+      min-width: 220px;
+      padding-left: 4px;
+      color: #3b2d1e;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    canvas {
+      width: min(94vw, 90vh, 760px);
+      max-width: 760px;
+      aspect-ratio: 1 / 1;
+      border-radius: 12px;
+      background: var(--board);
+      border: 1px solid rgba(80, 55, 30, 0.34);
+      box-shadow: 0 10px 28px rgba(66, 43, 17, 0.28);
+      touch-action: none;
+    }
+
+    .hint {
+      margin: 0;
+      font-size: 13px;
+      color: #5a4730;
+      user-select: none;
+    }
+
+    @media (max-width: 700px) {
+      .toolbar {
+        gap: 6px;
+      }
+
+      button,
+      select {
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      #statusText {
+        min-width: 160px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="toolbar">
+      <button id="startBtn" type="button">開始</button>
+      <button id="stopBtn" type="button" class="ghost">停止</button>
+      <label for="difficultySelect">
+        難度
+        <select id="difficultySelect">
+          <option value="低">低</option>
+          <option value="中" selected>中</option>
+          <option value="高">高</option>
+          <option value="極難">極難</option>
+        </select>
+      </label>
+      <label for="modeSelect">
+        模式
+        <select id="modeSelect">
+          <option value="玩家對電腦" selected>玩家對電腦</option>
+          <option value="電腦對電腦">電腦對電腦</option>
+        </select>
+      </label>
+      <span id="statusText">按開始開始遊戲</span>
+    </div>
+    <canvas id="boardCanvas" width="760" height="760" aria-label="25x25五子棋棋盤"></canvas>
+    <p class="hint">玩家模式為黑子先手。按 F 切換全螢幕，Esc 離開全螢幕。</p>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const BOARD_SIZE = 25;
+      const CELL = 30;
+      const MARGIN = 20;
+      const CANVAS_SIZE = MARGIN * 2 + (BOARD_SIZE - 1) * CELL;
+      const DIFFICULTY_LEVELS = ["低", "中", "高", "極難"];
+      const MODE_OPTIONS = ["玩家對電腦", "電腦對電腦"];
+
+      const EASY_RADIUS = 1;
+      const EASY_TOP = 10;
+      const EASY_ATTACK_WEIGHT = 0.9;
+      const EASY_DEFENSE_WEIGHT = 0.9;
+
+      const HARD_DEPTH = 3;
+      const HARD_RADIUS = 3;
+      const HARD_TOP = 14;
+      const HARD_ATTACK_WEIGHT = 1.05;
+      const HARD_DEFENSE_WEIGHT = 1.3;
+
+      const EXTREME_DEPTH = 5;
+      const EXTREME_RADIUS = 2;
+      const EXTREME_TOP = 8;
+      const EXTREME_ATTACK_WEIGHT = 1.2;
+      const EXTREME_DEFENSE_WEIGHT = 1.2;
+
+      const TT_LIMIT = 50000;
+      const TT_EXACT = 0;
+      const TT_LOWER = 1;
+      const TT_UPPER = 2;
+
+      const AUTO_MOVE_DELAY = 120;
+      const INF = 1_000_000;
+      const WIN_SCORE = 900_000;
+      const MAX_FRONTIER_RADIUS = Math.max(EASY_RADIUS, HARD_RADIUS, EXTREME_RADIUS);
+      const ZOBRIST_SEED = 20260212;
+
+      const MASK_64 = (1n << 64n) - 1n;
+
+      function createBoard() {
+        return Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+      }
+
+      function cloneBoard(board) {
+        return board.map((row) => row.slice());
+      }
+
+      function randomChoice(arr) {
+        if (!arr || arr.length === 0) {
+          return null;
+        }
+        const idx = Math.floor(Math.random() * arr.length);
+        return arr[idx];
+      }
+
+      function encodeCell(row, col) {
+        return row * BOARD_SIZE + col;
+      }
+
+      function decodeCell(id) {
+        return [Math.floor(id / BOARD_SIZE), id % BOARD_SIZE];
+      }
+
+      function createSplitMix64(seed) {
+        let x = BigInt(seed) & MASK_64;
+        return () => {
+          x = (x + 0x9e3779b97f4a7c15n) & MASK_64;
+          let z = x;
+          z = ((z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n) & MASK_64;
+          z = ((z ^ (z >> 27n)) * 0x94d049bb133111ebn) & MASK_64;
+          return (z ^ (z >> 31n)) & MASK_64;
+        };
+      }
+
+      function buildZobristTable() {
+        const next = createSplitMix64(ZOBRIST_SEED);
+        const table = [];
+        for (let r = 0; r < BOARD_SIZE; r += 1) {
+          const row = [];
+          for (let c = 0; c < BOARD_SIZE; c += 1) {
+            row.push([next(), next()]);
+          }
+          table.push(row);
+        }
+        return table;
+      }
+
+      const ZOBRIST_TABLE = buildZobristTable();
+
+      class SearchEngine {
+        constructor(board) {
+          this.board = cloneBoard(board);
+          this.maxRadius = MAX_FRONTIER_RADIUS;
+          this.stoneCount = 0;
+          this.hashKey = 0n;
+          this.frontierCount = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0));
+          this.frontierCells = new Set();
+          this.aiPlayer = 2;
+          this.opponentPlayer = 1;
+
+          for (let r = 0; r < BOARD_SIZE; r += 1) {
+            for (let c = 0; c < BOARD_SIZE; c += 1) {
+              const cell = this.board[r][c];
+              if (cell === 0) {
+                continue;
+              }
+              this.stoneCount += 1;
+              this.hashKey ^= ZOBRIST_TABLE[r][c][cell - 1];
+            }
+          }
+
+          for (let r = 0; r < BOARD_SIZE; r += 1) {
+            for (let c = 0; c < BOARD_SIZE; c += 1) {
+              if (this.board[r][c] !== 0) {
+                this._bumpFrontier(r, c, +1);
+              }
+            }
+          }
+        }
+
+        chooseMove(difficulty, player) {
+          this.aiPlayer = player;
+          this.opponentPlayer = player === 2 ? 1 : 2;
+
+          if (difficulty === "低") {
+            return this._chooseMoveEasy();
+          }
+          if (difficulty === "高") {
+            return this._chooseMoveHard();
+          }
+          if (difficulty === "極難") {
+            return this._chooseMoveExtreme();
+          }
+          return this._chooseMoveMedium();
+        }
+
+        _chooseMoveEasy() {
+          let move = this._findWinningMove(this.aiPlayer);
+          if (move) {
+            return move;
+          }
+
+          move = this._findWinningMove(this.opponentPlayer);
+          if (move) {
+            return move;
+          }
+
+          const candidates = this._topCandidates(
+            this.aiPlayer,
+            EASY_RADIUS,
+            EASY_TOP,
+            EASY_ATTACK_WEIGHT,
+            EASY_DEFENSE_WEIGHT
+          );
+          if (candidates.length === 0) {
+            return null;
+          }
+
+          const pickPool = candidates.slice(0, Math.min(5, candidates.length));
+          return randomChoice(pickPool);
+        }
+
+        _chooseMoveMedium() {
+          let move = this._findWinningMove(this.aiPlayer);
+          if (move) {
+            return move;
+          }
+
+          move = this._findWinningMove(this.opponentPlayer);
+          if (move) {
+            return move;
+          }
+
+          if (this.stoneCount === 0) {
+            const center = Math.floor(BOARD_SIZE / 2);
+            return [center, center];
+          }
+
+          const candidates = this._getCandidateMoves(HARD_RADIUS);
+          if (candidates.length === 0) {
+            return null;
+          }
+
+          let bestScore = -INF;
+          const bestMoves = [];
+          for (const [r, c] of candidates) {
+            const attack = this._evaluatePoint(r, c, this.aiPlayer);
+            const defense = this._evaluatePoint(r, c, this.opponentPlayer);
+            const score = attack * 1.1 + defense;
+            if (score > bestScore) {
+              bestScore = score;
+              bestMoves.length = 0;
+              bestMoves.push([r, c]);
+            } else if (score === bestScore) {
+              bestMoves.push([r, c]);
+            }
+          }
+
+          return randomChoice(bestMoves);
+        }
+
+        _chooseMoveHard() {
+          let move = this._findWinningMove(this.aiPlayer);
+          if (move) {
+            return move;
+          }
+
+          move = this._findWinningMove(this.opponentPlayer);
+          if (move) {
+            return move;
+          }
+
+          return this._searchBestMove(
+            HARD_DEPTH,
+            HARD_RADIUS,
+            HARD_TOP,
+            HARD_ATTACK_WEIGHT,
+            HARD_DEFENSE_WEIGHT
+          );
+        }
+
+        _chooseMoveExtreme() {
+          let move = this._findWinningMove(this.aiPlayer);
+          if (move) {
+            return move;
+          }
+
+          move = this._findWinningMove(this.opponentPlayer);
+          if (move) {
+            return move;
+          }
+
+          return this._searchBestMove(
+            EXTREME_DEPTH,
+            EXTREME_RADIUS,
+            EXTREME_TOP,
+            EXTREME_ATTACK_WEIGHT,
+            EXTREME_DEFENSE_WEIGHT
+          );
+        }
+        _searchBestMove(maxDepth, radius, limit, attackWeight, defenseWeight) {
+          const candidates = this._topCandidates(this.aiPlayer, radius, limit, attackWeight, defenseWeight);
+          if (candidates.length === 0) {
+            return null;
+          }
+
+          const transpositionTable = new Map();
+          let bestMove = null;
+
+          for (let depth = 1; depth <= maxDepth; depth += 1) {
+            const result = this._searchRoot(
+              depth,
+              radius,
+              limit,
+              attackWeight,
+              defenseWeight,
+              transpositionTable,
+              bestMove
+            );
+            if (result[1]) {
+              bestMove = result[1];
+            }
+          }
+
+          return bestMove;
+        }
+
+        _searchRoot(depth, radius, limit, attackWeight, defenseWeight, tt, bestHint) {
+          const baseCandidates = this._topCandidates(this.aiPlayer, radius, limit, attackWeight, defenseWeight);
+          if (baseCandidates.length === 0) {
+            return [-INF, null];
+          }
+
+          const candidates = this._orderCandidates(baseCandidates, bestHint);
+          let alpha = -INF;
+          const beta = INF;
+          let bestScore = -INF;
+          const bestMoves = [];
+
+          for (const [r, c] of candidates) {
+            if (this.board[r][c] !== 0) {
+              continue;
+            }
+
+            this._makeMove(r, c, this.aiPlayer);
+            if (this._checkWin(r, c, this.aiPlayer)) {
+              this._unmakeMove(r, c, this.aiPlayer);
+              return [WIN_SCORE + depth, [r, c]];
+            }
+
+            const score = this._minimax(
+              depth - 1,
+              false,
+              alpha,
+              beta,
+              radius,
+              limit,
+              attackWeight,
+              defenseWeight,
+              tt
+            );
+            this._unmakeMove(r, c, this.aiPlayer);
+
+            if (score > bestScore) {
+              bestScore = score;
+              bestMoves.length = 0;
+              bestMoves.push([r, c]);
+            } else if (score === bestScore) {
+              bestMoves.push([r, c]);
+            }
+
+            alpha = Math.max(alpha, bestScore);
+            if (alpha >= beta) {
+              break;
+            }
+          }
+
+          if (bestMoves.length === 0) {
+            return [bestScore, null];
+          }
+          return [bestScore, randomChoice(bestMoves)];
+        }
+
+        _minimax(depth, maximizing, alpha, beta, radius, limit, attackWeight, defenseWeight, tt) {
+          const key = `${this.hashKey.toString()}_${maximizing ? 1 : 0}`;
+          const cached = tt.get(key);
+          if (cached && cached.depth >= depth) {
+            if (cached.flag === TT_EXACT) {
+              return cached.score;
+            }
+            if (cached.flag === TT_LOWER) {
+              alpha = Math.max(alpha, cached.score);
+            } else if (cached.flag === TT_UPPER) {
+              beta = Math.min(beta, cached.score);
+            }
+            if (alpha >= beta) {
+              return cached.score;
+            }
+          }
+
+          if (depth <= 0) {
+            const score = this._boardScore(attackWeight, defenseWeight, radius);
+            this._storeTT(tt, key, depth, score, TT_EXACT);
+            return score;
+          }
+
+          const alphaOrig = alpha;
+          const betaOrig = beta;
+          const currentPlayer = maximizing ? this.aiPlayer : this.opponentPlayer;
+          const candidates = this._topCandidates(currentPlayer, radius, limit, attackWeight, defenseWeight);
+
+          if (candidates.length === 0) {
+            const score = this._boardScore(attackWeight, defenseWeight, radius);
+            this._storeTT(tt, key, depth, score, TT_EXACT);
+            return score;
+          }
+
+          if (maximizing) {
+            let best = -INF;
+            for (const [r, c] of candidates) {
+              if (this.board[r][c] !== 0) {
+                continue;
+              }
+
+              this._makeMove(r, c, this.aiPlayer);
+              let score;
+              if (this._checkWin(r, c, this.aiPlayer)) {
+                score = WIN_SCORE + depth;
+              } else {
+                score = this._minimax(
+                  depth - 1,
+                  false,
+                  alpha,
+                  beta,
+                  radius,
+                  limit,
+                  attackWeight,
+                  defenseWeight,
+                  tt
+                );
+              }
+              this._unmakeMove(r, c, this.aiPlayer);
+
+              if (score > best) {
+                best = score;
+              }
+              alpha = Math.max(alpha, best);
+              if (alpha >= beta) {
+                break;
+              }
+            }
+
+            let flag = TT_EXACT;
+            if (best <= alphaOrig) {
+              flag = TT_UPPER;
+            } else if (best >= betaOrig) {
+              flag = TT_LOWER;
+            }
+            this._storeTT(tt, key, depth, best, flag);
+            return best;
+          }
+
+          let best = INF;
+          for (const [r, c] of candidates) {
+            if (this.board[r][c] !== 0) {
+              continue;
+            }
+
+            this._makeMove(r, c, this.opponentPlayer);
+            let score;
+            if (this._checkWin(r, c, this.opponentPlayer)) {
+              score = -WIN_SCORE - depth;
+            } else {
+              score = this._minimax(
+                depth - 1,
+                true,
+                alpha,
+                beta,
+                radius,
+                limit,
+                attackWeight,
+                defenseWeight,
+                tt
+              );
+            }
+            this._unmakeMove(r, c, this.opponentPlayer);
+
+            if (score < best) {
+              best = score;
+            }
+            beta = Math.min(beta, best);
+            if (alpha >= beta) {
+              break;
+            }
+          }
+
+          let flag = TT_EXACT;
+          if (best <= alphaOrig) {
+            flag = TT_UPPER;
+          } else if (best >= betaOrig) {
+            flag = TT_LOWER;
+          }
+          this._storeTT(tt, key, depth, best, flag);
+          return best;
+        }
+
+        _storeTT(tt, key, depth, score, flag) {
+          if (tt.has(key) || tt.size < TT_LIMIT) {
+            tt.set(key, { depth, score, flag });
+          }
+        }
+
+        _makeMove(row, col, player) {
+          this.board[row][col] = player;
+          this.stoneCount += 1;
+          this.hashKey ^= ZOBRIST_TABLE[row][col][player - 1];
+          this._bumpFrontier(row, col, +1);
+          this.frontierCells.delete(encodeCell(row, col));
+        }
+
+        _unmakeMove(row, col, player) {
+          this._bumpFrontier(row, col, -1);
+          this.board[row][col] = 0;
+          this.stoneCount -= 1;
+          this.hashKey ^= ZOBRIST_TABLE[row][col][player - 1];
+
+          if (this.frontierCount[row][col] > 0) {
+            this.frontierCells.add(encodeCell(row, col));
+          }
+        }
+
+        _bumpFrontier(row, col, delta) {
+          const r0 = Math.max(0, row - this.maxRadius);
+          const r1 = Math.min(BOARD_SIZE - 1, row + this.maxRadius);
+          const c0 = Math.max(0, col - this.maxRadius);
+          const c1 = Math.min(BOARD_SIZE - 1, col + this.maxRadius);
+
+          for (let rr = r0; rr <= r1; rr += 1) {
+            for (let cc = c0; cc <= c1; cc += 1) {
+              this.frontierCount[rr][cc] += delta;
+              if (this.board[rr][cc] === 0) {
+                const id = encodeCell(rr, cc);
+                if (this.frontierCount[rr][cc] > 0) {
+                  this.frontierCells.add(id);
+                } else {
+                  this.frontierCells.delete(id);
+                }
+              }
+            }
+          }
+        }
+
+        _getCandidateMoves(radius = 2) {
+          if (this.stoneCount === 0) {
+            const center = Math.floor(BOARD_SIZE / 2);
+            return [[center, center]];
+          }
+
+          let candidates;
+          if (radius >= this.maxRadius) {
+            candidates = Array.from(this.frontierCells, decodeCell);
+          } else {
+            candidates = [];
+            for (const id of this.frontierCells) {
+              const [r, c] = decodeCell(id);
+              if (this._hasNeighborWithinRadius(r, c, radius)) {
+                candidates.push([r, c]);
+              }
+            }
+          }
+
+          if (candidates.length > 0) {
+            return candidates;
+          }
+
+          const allEmpty = [];
+          for (let r = 0; r < BOARD_SIZE; r += 1) {
+            for (let c = 0; c < BOARD_SIZE; c += 1) {
+              if (this.board[r][c] === 0) {
+                allEmpty.push([r, c]);
+              }
+            }
+          }
+          return allEmpty;
+        }
+
+        _hasNeighborWithinRadius(row, col, radius) {
+          const r0 = Math.max(0, row - radius);
+          const r1 = Math.min(BOARD_SIZE - 1, row + radius);
+          const c0 = Math.max(0, col - radius);
+          const c1 = Math.min(BOARD_SIZE - 1, col + radius);
+
+          for (let rr = r0; rr <= r1; rr += 1) {
+            for (let cc = c0; cc <= c1; cc += 1) {
+              if (this.board[rr][cc] !== 0) {
+                return true;
+              }
+            }
+          }
+          return false;
+        }
+        _topCandidates(player, radius = 2, limit = 8, attackWeight = 1.0, defenseWeight = 1.0) {
+          const candidates = this._getCandidateMoves(radius);
+          const other = player === 2 ? 1 : 2;
+          const center = Math.floor(BOARD_SIZE / 2);
+          const scored = [];
+
+          for (const [r, c] of candidates) {
+            if (this.board[r][c] !== 0) {
+              continue;
+            }
+            let score = this._evaluatePoint(r, c, player) * attackWeight;
+            score += this._evaluatePoint(r, c, other) * defenseWeight;
+            score -= (Math.abs(r - center) + Math.abs(c - center)) * 0.01;
+            scored.push([score, r, c]);
+          }
+
+          scored.sort((a, b) => b[0] - a[0]);
+          return scored.slice(0, limit).map((item) => [item[1], item[2]]);
+        }
+
+        _orderCandidates(candidates, bestHint) {
+          if (!bestHint) {
+            return candidates;
+          }
+          const hintIndex = candidates.findIndex(
+            (move) => move[0] === bestHint[0] && move[1] === bestHint[1]
+          );
+          if (hintIndex <= 0) {
+            return candidates;
+          }
+          const ordered = candidates.slice();
+          const [hintMove] = ordered.splice(hintIndex, 1);
+          ordered.unshift(hintMove);
+          return ordered;
+        }
+
+        _boardScore(attackWeight = 1.0, defenseWeight = 1.0, radius = 2) {
+          const candidates = this._getCandidateMoves(radius);
+          if (candidates.length === 0) {
+            return 0;
+          }
+
+          let bestAi = 0;
+          let bestOp = 0;
+          for (const [r, c] of candidates) {
+            if (this.board[r][c] !== 0) {
+              continue;
+            }
+            const aiScore = this._evaluatePoint(r, c, this.aiPlayer);
+            const opScore = this._evaluatePoint(r, c, this.opponentPlayer);
+            if (aiScore > bestAi) {
+              bestAi = aiScore;
+            }
+            if (opScore > bestOp) {
+              bestOp = opScore;
+            }
+          }
+          return bestAi * attackWeight - bestOp * defenseWeight;
+        }
+
+        _findWinningMove(player) {
+          const candidates = this._getCandidateMoves(this.maxRadius);
+          if (candidates.length === 0) {
+            return null;
+          }
+
+          candidates.sort(
+            (a, b) => this._evaluatePoint(b[0], b[1], player) - this._evaluatePoint(a[0], a[1], player)
+          );
+
+          for (const [r, c] of candidates) {
+            if (this.board[r][c] !== 0) {
+              continue;
+            }
+            this._makeMove(r, c, player);
+            const win = this._checkWin(r, c, player);
+            this._unmakeMove(r, c, player);
+            if (win) {
+              return [r, c];
+            }
+          }
+          return null;
+        }
+
+        _evaluatePoint(row, col, player) {
+          const directions = [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [1, -1],
+          ];
+
+          let score = 0;
+          for (const [dr, dc] of directions) {
+            const [c1, o1] = this._countLine(row, col, dr, dc, player);
+            const [c2, o2] = this._countLine(row, col, -dr, -dc, player);
+            const total = c1 + c2 + 1;
+            const openEnds = o1 + o2;
+            score += this._scorePattern(total, openEnds);
+          }
+          return score;
+        }
+
+        _countLine(row, col, dr, dc, player) {
+          let count = 0;
+          let r = row + dr;
+          let c = col + dc;
+          while (
+            r >= 0 &&
+            r < BOARD_SIZE &&
+            c >= 0 &&
+            c < BOARD_SIZE &&
+            this.board[r][c] === player
+          ) {
+            count += 1;
+            r += dr;
+            c += dc;
+          }
+
+          let openEnd = 0;
+          if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && this.board[r][c] === 0) {
+            openEnd = 1;
+          }
+          return [count, openEnd];
+        }
+
+        _scorePattern(total, openEnds) {
+          if (total >= 5) {
+            return 100000;
+          }
+          if (total === 4 && openEnds === 2) {
+            return 20000;
+          }
+          if (total === 4 && openEnds === 1) {
+            return 8000;
+          }
+          if (total === 3 && openEnds === 2) {
+            return 2000;
+          }
+          if (total === 3 && openEnds === 1) {
+            return 300;
+          }
+          if (total === 2 && openEnds === 2) {
+            return 120;
+          }
+          if (total === 2 && openEnds === 1) {
+            return 30;
+          }
+          if (total === 1 && openEnds === 2) {
+            return 8;
+          }
+          return 2;
+        }
+
+        _checkWin(row, col, player) {
+          const directions = [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [1, -1],
+          ];
+          for (const [dr, dc] of directions) {
+            let total = 1;
+            total += this._countDir(row, col, dr, dc, player);
+            total += this._countDir(row, col, -dr, -dc, player);
+            if (total >= 5) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        _countDir(row, col, dr, dc, player) {
+          let count = 0;
+          let r = row + dr;
+          let c = col + dc;
+          while (
+            r >= 0 &&
+            r < BOARD_SIZE &&
+            c >= 0 &&
+            c < BOARD_SIZE &&
+            this.board[r][c] === player
+          ) {
+            count += 1;
+            r += dr;
+            c += dc;
+          }
+          return count;
+        }
+      }
+
+      const ui = {
+        canvas: document.getElementById("boardCanvas"),
+        startBtn: document.getElementById("startBtn"),
+        stopBtn: document.getElementById("stopBtn"),
+        difficultySelect: document.getElementById("difficultySelect"),
+        modeSelect: document.getElementById("modeSelect"),
+        statusText: document.getElementById("statusText"),
+      };
+
+      const ctx = ui.canvas.getContext("2d");
+
+      const state = {
+        running: false,
+        playerTurn: true,
+        autoLoop: false,
+        currentPlayer: 1,
+        aiThinking: false,
+        aiToken: 0,
+        board: createBoard(),
+        lastMove: null,
+        lastWhiteMove: null,
+        winLine: null,
+        moveCount: 0,
+        difficulty: ui.difficultySelect.value,
+        mode: ui.modeSelect.value,
+        status: "按開始開始遊戲",
+        overlayMessage: "",
+      };
+
+      let schedulerNow = 0;
+      let schedulerIdSeq = 0;
+      const schedulerTasks = new Map();
+
+      function scheduleTask(callback, delayMs = 0) {
+        schedulerIdSeq += 1;
+        const id = schedulerIdSeq;
+        schedulerTasks.set(id, {
+          due: schedulerNow + Math.max(0, delayMs),
+          callback,
+        });
+        return id;
+      }
+
+      function stepScheduler(deltaMs) {
+        schedulerNow += Math.max(0, deltaMs);
+        while (true) {
+          let nextId = null;
+          let nextDue = Infinity;
+          for (const [id, task] of schedulerTasks) {
+            if (task.due < nextDue) {
+              nextDue = task.due;
+              nextId = id;
+            }
+          }
+          if (nextId === null || nextDue > schedulerNow) {
+            break;
+          }
+          const task = schedulerTasks.get(nextId);
+          schedulerTasks.delete(nextId);
+          try {
+            task.callback();
+          } catch (error) {
+            console.error(error);
+          }
+        }
+      }
+
+      function setStatus(message) {
+        state.status = message;
+        ui.statusText.textContent = message;
+      }
+
+      function placeStone(row, col, player) {
+        state.board[row][col] = player;
+        state.moveCount += 1;
+        state.lastMove = [row, col];
+        if (player === 2) {
+          state.lastWhiteMove = [row, col];
+        }
+      }
+
+      function getWinLine(row, col, player) {
+        const directions = [
+          [1, 0],
+          [0, 1],
+          [1, 1],
+          [1, -1],
+        ];
+        for (const [dr, dc] of directions) {
+          const line = [[row, col]];
+
+          let r = row + dr;
+          let c = col + dc;
+          while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && state.board[r][c] === player) {
+            line.push([r, c]);
+            r += dr;
+            c += dc;
+          }
+
+          r = row - dr;
+          c = col - dc;
+          while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && state.board[r][c] === player) {
+            line.unshift([r, c]);
+            r -= dr;
+            c -= dc;
+          }
+
+          if (line.length >= 5) {
+            const moveIndex = line.findIndex((pt) => pt[0] === row && pt[1] === col);
+            let start = Math.max(0, moveIndex - 4);
+            let end = start + 5;
+            if (end > line.length) {
+              end = line.length;
+              start = end - 5;
+            }
+            return line.slice(start, end);
+          }
+        }
+        return null;
+      }
+
+      function isDraw() {
+        return state.moveCount >= BOARD_SIZE * BOARD_SIZE;
+      }
+
+      function endGame(message, auto = false) {
+        state.running = false;
+        state.playerTurn = false;
+        state.autoLoop = false;
+        state.aiThinking = false;
+        state.aiToken += 1;
+        state.overlayMessage = message;
+
+        if (auto) {
+          setStatus(`${message}（按開始繼續）`);
+          return;
+        }
+        setStatus(message);
+      }
+
+      function applyAiMove(player, auto, move) {
+        if (!move) {
+          endGame("平手！", auto);
+          return "ended";
+        }
+
+        const [row, col] = move;
+        if (
+          row < 0 ||
+          row >= BOARD_SIZE ||
+          col < 0 ||
+          col >= BOARD_SIZE ||
+          state.board[row][col] !== 0
+        ) {
+          endGame("平手！", auto);
+          return "ended";
+        }
+
+        placeStone(row, col, player);
+        const winLine = getWinLine(row, col, player);
+        if (winLine) {
+          state.winLine = winLine;
+          if (auto) {
+            endGame(player === 1 ? "黑方勝利！" : "白方勝利！", true);
+          } else {
+            endGame("電腦勝利！");
+          }
+          return "ended";
+        }
+
+        if (isDraw()) {
+          endGame("平手！", auto);
+          return "ended";
+        }
+        return "continue";
+      }
+      function onAiMoveReady(token, player, auto, move) {
+        if (token !== state.aiToken) {
+          return;
+        }
+
+        state.aiThinking = false;
+        if (!state.running) {
+          return;
+        }
+
+        const result = applyAiMove(player, auto, move);
+        if (result !== "continue") {
+          return;
+        }
+
+        if (auto) {
+          state.currentPlayer = state.currentPlayer === 2 ? 1 : 2;
+          scheduleTask(autoStep, AUTO_MOVE_DELAY);
+        } else {
+          state.playerTurn = true;
+          setStatus("輪到玩家");
+        }
+      }
+
+      function requestAiMove(player, auto) {
+        if (!state.running || state.aiThinking) {
+          return;
+        }
+
+        const token = state.aiToken + 1;
+        state.aiToken = token;
+        state.aiThinking = true;
+        const boardSnapshot = cloneBoard(state.board);
+        const difficulty = state.difficulty;
+
+        scheduleTask(() => {
+          if (token !== state.aiToken || !state.running) {
+            return;
+          }
+          const engine = new SearchEngine(boardSnapshot);
+          const move = engine.chooseMove(difficulty, player);
+          onAiMoveReady(token, player, auto, move);
+        }, 0);
+      }
+
+      function autoStep() {
+        if (!state.running || !state.autoLoop || state.aiThinking) {
+          return;
+        }
+
+        if (state.currentPlayer === 1 && state.moveCount === 0) {
+          const row = Math.floor(Math.random() * BOARD_SIZE);
+          const col = Math.floor(Math.random() * BOARD_SIZE);
+          placeStone(row, col, 1);
+          setStatus(`電腦對電腦：黑 隨機開局 (${row + 1},${col + 1})`);
+          state.currentPlayer = 2;
+
+          if (isDraw()) {
+            endGame("平手！", true);
+            return;
+          }
+
+          scheduleTask(autoStep, AUTO_MOVE_DELAY);
+          return;
+        }
+
+        const playerLabel = state.currentPlayer === 1 ? "黑" : "白";
+        setStatus(`電腦對電腦：${playerLabel} 下子中…`);
+        requestAiMove(state.currentPlayer, true);
+      }
+
+      function startGame() {
+        state.aiToken += 1;
+        state.aiThinking = false;
+
+        state.board = createBoard();
+        state.running = true;
+        state.lastMove = null;
+        state.lastWhiteMove = null;
+        state.winLine = null;
+        state.moveCount = 0;
+        state.overlayMessage = "";
+        state.mode = ui.modeSelect.value;
+        state.difficulty = ui.difficultySelect.value;
+        state.autoLoop = state.mode === MODE_OPTIONS[1];
+        state.currentPlayer = 1;
+
+        if (state.autoLoop) {
+          state.playerTurn = false;
+          setStatus(`遊戲開始：電腦對電腦（難度：${state.difficulty}）`);
+          scheduleTask(autoStep, AUTO_MOVE_DELAY);
+        } else {
+          state.playerTurn = true;
+          setStatus(`遊戲開始：玩家先手（難度：${state.difficulty}）`);
+        }
+      }
+
+      function stopGame() {
+        state.running = false;
+        state.autoLoop = false;
+        state.playerTurn = false;
+        state.aiThinking = false;
+        state.aiToken += 1;
+        state.overlayMessage = "已停止";
+        setStatus("已停止：按開始重新");
+      }
+
+      function handleCanvasClick(event) {
+        if (!state.running || !state.playerTurn || state.aiThinking) {
+          return;
+        }
+        if (state.mode !== MODE_OPTIONS[0]) {
+          return;
+        }
+
+        const rect = ui.canvas.getBoundingClientRect();
+        const scaleX = ui.canvas.width / rect.width;
+        const scaleY = ui.canvas.height / rect.height;
+        const canvasX = (event.clientX - rect.left) * scaleX;
+        const canvasY = (event.clientY - rect.top) * scaleY;
+
+        const relX = canvasX - MARGIN;
+        const relY = canvasY - MARGIN;
+        const col = Math.floor(relX / CELL + 0.5);
+        const row = Math.floor(relY / CELL + 0.5);
+
+        if (row < 0 || col < 0 || row >= BOARD_SIZE || col >= BOARD_SIZE) {
+          return;
+        }
+
+        const ix = MARGIN + col * CELL;
+        const iy = MARGIN + row * CELL;
+        if (Math.abs(canvasX - ix) > CELL * 0.45 || Math.abs(canvasY - iy) > CELL * 0.45) {
+          return;
+        }
+
+        if (state.board[row][col] !== 0) {
+          return;
+        }
+
+        placeStone(row, col, 1);
+        const winLine = getWinLine(row, col, 1);
+        if (winLine) {
+          state.winLine = winLine;
+          endGame("玩家勝利！");
+          return;
+        }
+
+        if (isDraw()) {
+          endGame("平手！");
+          return;
+        }
+
+        state.playerTurn = false;
+        setStatus("電腦下子中…");
+        scheduleTask(() => requestAiMove(2, false), AUTO_MOVE_DELAY);
+      }
+
+      function drawBoard() {
+        ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        ctx.fillStyle = "#f3d79e";
+        ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+        const start = MARGIN;
+        const end = MARGIN + (BOARD_SIZE - 1) * CELL;
+        ctx.strokeStyle = "#5b3a1e";
+        ctx.lineWidth = 1;
+
+        for (let i = 0; i < BOARD_SIZE; i += 1) {
+          const x = start + i * CELL;
+          const y = start + i * CELL;
+          ctx.beginPath();
+          ctx.moveTo(x, start);
+          ctx.lineTo(x, end);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(start, y);
+          ctx.lineTo(end, y);
+          ctx.stroke();
+        }
+
+        for (let r = 0; r < BOARD_SIZE; r += 1) {
+          for (let c = 0; c < BOARD_SIZE; c += 1) {
+            if (state.board[r][c] !== 0) {
+              drawStone(r, c, state.board[r][c]);
+            }
+          }
+        }
+
+        drawLastWhiteMarker();
+        drawWinLine();
+        drawOverlay();
+      }
+
+      function drawStone(row, col, player) {
+        const cx = MARGIN + col * CELL;
+        const cy = MARGIN + row * CELL;
+        const r = CELL * 0.42;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        if (player === 1) {
+          ctx.fillStyle = "#000";
+          ctx.strokeStyle = "#222";
+        } else {
+          ctx.fillStyle = "#fff";
+          ctx.strokeStyle = "#777";
+        }
+        ctx.lineWidth = 1;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      function drawLastWhiteMarker() {
+        if (!state.lastWhiteMove) {
+          return;
+        }
+        const [row, col] = state.lastWhiteMove;
+        if (state.board[row][col] !== 2) {
+          return;
+        }
+        const cx = MARGIN + col * CELL;
+        const cy = MARGIN + row * CELL;
+        const r = CELL * 0.12;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fillStyle = "red";
+        ctx.fill();
+      }
+
+      function drawWinLine() {
+        if (!state.winLine || state.winLine.length === 0) {
+          return;
+        }
+        const [r1, c1] = state.winLine[0];
+        const [r2, c2] = state.winLine[state.winLine.length - 1];
+        const x1 = MARGIN + c1 * CELL;
+        const y1 = MARGIN + r1 * CELL;
+        const x2 = MARGIN + c2 * CELL;
+        const y2 = MARGIN + r2 * CELL;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = "#2b6cff";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      function drawOverlay() {
+        if (state.running || !state.overlayMessage) {
+          return;
+        }
+
+        ctx.fillStyle = "rgba(0, 0, 0, 0.16)";
+        ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+        ctx.fillRect(150, CANVAS_SIZE / 2 - 44, CANVAS_SIZE - 300, 88);
+        ctx.strokeStyle = "rgba(66, 46, 22, 0.45)";
+        ctx.strokeRect(150, CANVAS_SIZE / 2 - 44, CANVAS_SIZE - 300, 88);
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = '700 30px "Microsoft JhengHei", "Noto Sans TC", sans-serif';
+        ctx.fillStyle = state.overlayMessage.includes("勝利") ? "#1f5fbf" : "#9f2b2b";
+        ctx.fillText(state.overlayMessage, CANVAS_SIZE / 2, CANVAS_SIZE / 2);
+      }
+      function collectStones() {
+        const stones = [];
+        for (let r = 0; r < BOARD_SIZE; r += 1) {
+          for (let c = 0; c < BOARD_SIZE; c += 1) {
+            const player = state.board[r][c];
+            if (player !== 0) {
+              stones.push({ row: r, col: c, player });
+            }
+          }
+        }
+        return stones;
+      }
+
+      function renderGameToText() {
+        const payload = {
+          coordinate_system: "row/col origin at top-left (0,0), row +down, col +right",
+          board_size: BOARD_SIZE,
+          running: state.running,
+          mode: state.mode,
+          difficulty: state.difficulty,
+          auto_loop: state.autoLoop,
+          player_turn: state.playerTurn,
+          current_player: state.currentPlayer,
+          ai_thinking: state.aiThinking,
+          move_count: state.moveCount,
+          last_move: state.lastMove,
+          last_white_move: state.lastWhiteMove,
+          win_line: state.winLine,
+          status: state.status,
+          stones: collectStones(),
+        };
+        return JSON.stringify(payload);
+      }
+
+      function advanceTime(ms) {
+        const total = Number(ms);
+        const safeMs = Number.isFinite(total) && total > 0 ? total : 16;
+        let remaining = safeMs;
+        while (remaining > 0) {
+          const step = Math.min(16, remaining);
+          stepScheduler(step);
+          remaining -= step;
+        }
+        drawBoard();
+      }
+
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          ui.canvas.requestFullscreen?.().catch(() => {});
+        } else {
+          document.exitFullscreen?.().catch(() => {});
+        }
+      }
+
+      function handleKeydown(event) {
+        if (event.key === "f" || event.key === "F") {
+          toggleFullscreen();
+          event.preventDefault();
+          return;
+        }
+        if (event.key === "Escape" && document.fullscreenElement) {
+          document.exitFullscreen?.().catch(() => {});
+        }
+      }
+
+      let rafId = 0;
+      let lastTs = 0;
+      function frame(ts) {
+        if (!lastTs) {
+          lastTs = ts;
+        }
+        const delta = Math.min(48, ts - lastTs);
+        lastTs = ts;
+        stepScheduler(delta);
+        drawBoard();
+        rafId = window.requestAnimationFrame(frame);
+      }
+
+      function init() {
+        ui.canvas.width = CANVAS_SIZE;
+        ui.canvas.height = CANVAS_SIZE;
+
+        ui.startBtn.addEventListener("click", startGame);
+        ui.stopBtn.addEventListener("click", stopGame);
+        ui.canvas.addEventListener("click", handleCanvasClick);
+        ui.difficultySelect.addEventListener("change", () => {
+          state.difficulty = ui.difficultySelect.value;
+          if (!DIFFICULTY_LEVELS.includes(state.difficulty)) {
+            state.difficulty = "中";
+          }
+        });
+        ui.modeSelect.addEventListener("change", () => {
+          state.mode = ui.modeSelect.value;
+          if (!MODE_OPTIONS.includes(state.mode)) {
+            state.mode = MODE_OPTIONS[0];
+          }
+        });
+        window.addEventListener("keydown", handleKeydown, { passive: false });
+
+        window.render_game_to_text = renderGameToText;
+        window.advanceTime = advanceTime;
+
+        setStatus("按開始開始遊戲");
+        drawBoard();
+        rafId = window.requestAnimationFrame(frame);
+      }
+
+      window.addEventListener("beforeunload", () => {
+        if (rafId) {
+          window.cancelAnimationFrame(rafId);
+        }
+      });
+
+      init();
+    })();
+  </script>
+</body>
+</html>
