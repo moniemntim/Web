@@ -6,8 +6,8 @@
   <title>Tetris Web - 5s-2</title>
   <style>
     :root {
-      --bg-a: #75db30;
-      --bg-b: #d7f498;
+      --bg-a: #121826;
+      --bg-b: #1f2937;
       --frame: #0c0c0f;
       --surface: #1f2024;
       --text: #f8fbff;
@@ -68,7 +68,7 @@
 <body>
   <main class="shell">
     <canvas id="game" width="660" height="660" tabindex="0" aria-label="Tetris 遊戲畫布"></canvas>
-    <div class="hint">方向鍵控制。F 切換全螢幕，Esc 可退出全螢幕。</div>
+    <div class="hint">電腦：方向鍵控制。手機：滑動/按住/雙擊操作。F 切換全螢幕，Esc 可退出全螢幕。</div>
   </main>
 
   <script>
@@ -92,9 +92,13 @@
       const MIN_DROP_MS = 80;
       const MAX_HIGH_SCORES = 3;
       const HIGH_SCORE_KEY = "tetris_5s2_high_scores";
+      const MOBILE_SWIPE_THRESHOLD = 34;
+      const MOBILE_DOUBLE_TAP_MS = 280;
+      const MOBILE_DOUBLE_TAP_DIST = 30;
+      const MOBILE_HOLD_MS = 220;
 
-      const BG_OUTER_TOP = [117, 219, 48];
-      const BG_OUTER_BOTTOM = [215, 244, 152];
+      const BG_OUTER_TOP = [18, 24, 38];
+      const BG_OUTER_BOTTOM = [31, 41, 55];
       const BG_BOARD_TOP = [62, 63, 68];
       const BG_BOARD_BOTTOM = [42, 43, 47];
       const BG_BOARD_CELL_A = [57, 58, 63];
@@ -138,6 +142,11 @@
       let animationHandle = 0;
       let lastTs = 0;
       let lagMs = 0;
+      let touchState = null;
+      let lastTap = null;
+
+      const isMobileClient = window.matchMedia("(pointer: coarse)").matches
+        || /Mobi|Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
       function rgb(arr) {
         return `rgb(${arr[0]}, ${arr[1]}, ${arr[2]})`;
@@ -466,6 +475,69 @@
         }
       }
 
+      function canControlPiece() {
+        return !state.gameOver && !state.paused;
+      }
+
+      function moveLeftOnce() {
+        if (!canControlPiece()) {
+          return;
+        }
+        if (fits(state.grid, state.shape, state.x - 1, state.y)) {
+          state.x -= 1;
+          state.rotatedLast = false;
+        }
+      }
+
+      function moveRightOnce() {
+        if (!canControlPiece()) {
+          return;
+        }
+        if (fits(state.grid, state.shape, state.x + 1, state.y)) {
+          state.x += 1;
+          state.rotatedLast = false;
+        }
+      }
+
+      function rotateOnce() {
+        if (!canControlPiece()) {
+          return;
+        }
+        const result = tryRotateWithKick(state.grid, state.shape, state.x, state.y);
+        state.shape = result.shape;
+        state.x = result.x;
+        state.y = result.y;
+        if (result.rotated) {
+          state.rotatedLast = true;
+        }
+      }
+
+      function hardDrop() {
+        if (!canControlPiece()) {
+          return;
+        }
+        let moved = false;
+        while (fits(state.grid, state.shape, state.x, state.y + 1)) {
+          state.y += 1;
+          moved = true;
+        }
+        if (moved) {
+          state.rotatedLast = false;
+        }
+        state.forceLock = true;
+        state.dropTimer = 0;
+      }
+
+      function startSoftDrop() {
+        if (canControlPiece()) {
+          state.fastDrop = true;
+        }
+      }
+
+      function stopSoftDrop() {
+        state.fastDrop = false;
+      }
+
       function handleKeyDown(event) {
         if (event.key === "f" || event.key === "F") {
           toggleFullscreen();
@@ -507,10 +579,7 @@
         if (event.key === "ArrowLeft") {
           state.moveLeft = true;
           state.moveTimer = 0;
-          if (fits(state.grid, state.shape, state.x - 1, state.y)) {
-            state.x -= 1;
-            state.rotatedLast = false;
-          }
+          moveLeftOnce();
           event.preventDefault();
           return;
         }
@@ -518,44 +587,26 @@
         if (event.key === "ArrowRight") {
           state.moveRight = true;
           state.moveTimer = 0;
-          if (fits(state.grid, state.shape, state.x + 1, state.y)) {
-            state.x += 1;
-            state.rotatedLast = false;
-          }
+          moveRightOnce();
           event.preventDefault();
           return;
         }
 
         if (event.key === "ArrowUp") {
-          const result = tryRotateWithKick(state.grid, state.shape, state.x, state.y);
-          state.shape = result.shape;
-          state.x = result.x;
-          state.y = result.y;
-          if (result.rotated) {
-            state.rotatedLast = true;
-          }
+          rotateOnce();
           event.preventDefault();
           return;
         }
 
         if (event.key === "ArrowDown") {
-          state.fastDrop = true;
+          startSoftDrop();
           event.preventDefault();
           return;
         }
 
         if (event.key === " " || event.code === "Space") {
           if (!event.repeat) {
-            let moved = false;
-            while (fits(state.grid, state.shape, state.x, state.y + 1)) {
-              state.y += 1;
-              moved = true;
-            }
-            if (moved) {
-              state.rotatedLast = false;
-            }
-            state.forceLock = true;
-            state.dropTimer = 0;
+            hardDrop();
           }
           event.preventDefault();
           return;
@@ -569,7 +620,7 @@
 
       function handleKeyUp(event) {
         if (event.key === "ArrowDown") {
-          state.fastDrop = false;
+          stopSoftDrop();
           event.preventDefault();
           return;
         }
@@ -582,6 +633,122 @@
           state.moveRight = false;
           event.preventDefault();
         }
+      }
+
+      function bindMobileTouchControls() {
+        const clearTouchState = () => {
+          if (!touchState) {
+            return;
+          }
+          if (touchState.holdTimer) {
+            window.clearTimeout(touchState.holdTimer);
+          }
+          touchState = null;
+          stopSoftDrop();
+        };
+
+        canvas.addEventListener("touchstart", (event) => {
+          if (event.touches.length !== 1) {
+            clearTouchState();
+            return;
+          }
+
+          canvas.focus();
+          const touch = event.touches[0];
+          const now = Date.now();
+
+          if (lastTap) {
+            const deltaTime = now - lastTap.time;
+            const deltaX = touch.clientX - lastTap.x;
+            const deltaY = touch.clientY - lastTap.y;
+            const dist = Math.hypot(deltaX, deltaY);
+            if (deltaTime <= MOBILE_DOUBLE_TAP_MS && dist <= MOBILE_DOUBLE_TAP_DIST) {
+              attemptHold();
+              lastTap = null;
+              event.preventDefault();
+              clearTouchState();
+              return;
+            }
+          }
+
+          touchState = {
+            startX: touch.clientX,
+            startY: touch.clientY,
+            moved: false,
+            holdActive: false,
+            holdTimer: window.setTimeout(() => {
+              if (touchState && !touchState.moved) {
+                touchState.holdActive = true;
+                startSoftDrop();
+              }
+            }, MOBILE_HOLD_MS),
+          };
+          event.preventDefault();
+        }, { passive: false });
+
+        canvas.addEventListener("touchmove", (event) => {
+          if (!touchState || event.touches.length !== 1) {
+            return;
+          }
+
+          const touch = event.touches[0];
+          const dx = touch.clientX - touchState.startX;
+          const dy = touch.clientY - touchState.startY;
+
+          if (!touchState.moved && Math.hypot(dx, dy) >= MOBILE_SWIPE_THRESHOLD) {
+            touchState.moved = true;
+            if (touchState.holdTimer) {
+              window.clearTimeout(touchState.holdTimer);
+              touchState.holdTimer = 0;
+            }
+            if (touchState.holdActive) {
+              stopSoftDrop();
+              touchState.holdActive = false;
+            }
+
+            if (Math.abs(dx) >= Math.abs(dy)) {
+              if (dx > 0) {
+                moveRightOnce();
+              } else {
+                moveLeftOnce();
+              }
+            } else if (dy > 0) {
+              hardDrop();
+            } else {
+              rotateOnce();
+            }
+          }
+          event.preventDefault();
+        }, { passive: false });
+
+        const finishTouch = (event) => {
+          if (!touchState) {
+            return;
+          }
+          const endedWithoutSwipe = !touchState.moved;
+          const lastTouch = event.changedTouches && event.changedTouches[0];
+
+          if (touchState.holdTimer) {
+            window.clearTimeout(touchState.holdTimer);
+          }
+          if (touchState.holdActive) {
+            stopSoftDrop();
+          }
+          touchState = null;
+
+          if (endedWithoutSwipe && lastTouch) {
+            lastTap = {
+              time: Date.now(),
+              x: lastTouch.clientX,
+              y: lastTouch.clientY,
+            };
+          }
+
+          event.preventDefault();
+        };
+
+        canvas.addEventListener("touchend", finishTouch, { passive: false });
+        canvas.addEventListener("touchcancel", finishTouch, { passive: false });
       }
 
       function tickGameplay(dt) {
@@ -654,8 +821,8 @@
         ctx.fillRect(0, 0, W, H);
 
         const glow = ctx.createRadialGradient(W * 0.5, H * 0.44, 20, W * 0.5, H * 0.44, 275);
-        glow.addColorStop(0, "rgba(239,255,208,0.38)");
-        glow.addColorStop(1, "rgba(239,255,208,0)");
+        glow.addColorStop(0, "rgba(138, 163, 197, 0.22)");
+        glow.addColorStop(1, "rgba(138, 163, 197, 0)");
         ctx.fillStyle = glow;
         ctx.fillRect(0, 0, W, H);
       }
@@ -994,6 +1161,10 @@
         canvas.addEventListener("keydown", handleKeyDown);
         canvas.addEventListener("keyup", handleKeyUp);
         canvas.addEventListener("click", () => canvas.focus());
+
+        if (isMobileClient) {
+          bindMobileTouchControls();
+        }
 
         window.addEventListener("keydown", (event) => {
           const playingKeys = [
