@@ -6,8 +6,8 @@
   <title>Tetris Web - 5s-2</title>
   <style>
     :root {
-      --bg-a: #75db30;
-      --bg-b: #d7f498;
+      --bg-a: #0b1020;
+      --bg-b: #1a2338;
       --frame: #0c0c0f;
       --surface: #1f2024;
       --text: #f8fbff;
@@ -29,8 +29,8 @@
       display: grid;
       place-items: center;
       background:
-        radial-gradient(1200px 700px at 20% 10%, rgba(255, 255, 255, 0.45), transparent 60%),
-        radial-gradient(900px 520px at 90% 85%, rgba(49, 79, 21, 0.22), transparent 70%),
+        radial-gradient(1200px 700px at 20% 10%, rgba(255, 255, 255, 0.12), transparent 60%),
+        radial-gradient(900px 520px at 90% 85%, rgba(55, 77, 130, 0.18), transparent 70%),
         linear-gradient(135deg, var(--bg-a), var(--bg-b));
       font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
       color: var(--text);
@@ -181,8 +181,8 @@
       const MOBILE_DOUBLE_TAP_DIST = 30;
       const MOBILE_HOLD_MS = 220;
 
-      const BG_OUTER_TOP = [117, 219, 48];
-      const BG_OUTER_BOTTOM = [215, 244, 152];
+      const BG_OUTER_TOP = [11, 16, 32];
+      const BG_OUTER_BOTTOM = [26, 35, 56];
       const BG_BOARD_TOP = [62, 63, 68];
       const BG_BOARD_BOTTOM = [42, 43, 47];
       const BG_BOARD_CELL_A = [57, 58, 63];
@@ -735,9 +735,7 @@
         }
 
         if (event.key === "r" || event.key === "R") {
-          if (state.gameOver) {
-            resetGame();
-          }
+          resetGame();
           event.preventDefault();
           return;
         }
@@ -1349,34 +1347,53 @@
           bindMobileTouchControls();
         }
 
+        const keyboardCaptureKeys = new Set([
+          "ArrowLeft",
+          "ArrowRight",
+          "ArrowUp",
+          "ArrowDown",
+          " ",
+          "Space",
+          "Shift",
+          "Control",
+          "c",
+          "C",
+          "p",
+          "P",
+          "o",
+          "O",
+          "l",
+          "L",
+          "k",
+          "K",
+          "r",
+          "R",
+          "f",
+          "F",
+        ]);
+
+        const shouldCaptureKey = (event) => {
+          return keyboardCaptureKeys.has(event.key) || keyboardCaptureKeys.has(event.code);
+        };
+
         window.addEventListener("keydown", (event) => {
-          const playingKeys = [
-            "ArrowLeft",
-            "ArrowRight",
-            "ArrowUp",
-            "ArrowDown",
-            " ",
-            "Space",
-            "Shift",
-            "Control",
-            "c",
-            "C",
-            "p",
-            "P",
-            "o",
-            "O",
-            "l",
-            "L",
-            "k",
-            "K",
-            "r",
-            "R",
-            "f",
-            "F",
-          ];
-          if (playingKeys.includes(event.key) || playingKeys.includes(event.code)) {
-            event.preventDefault();
+          if (!shouldCaptureKey(event)) {
+            return;
+          }
+          event.preventDefault();
+          if (event.target !== canvas) {
             canvas.focus();
+            handleKeyDown(event);
+          }
+        }, { passive: false });
+
+        window.addEventListener("keyup", (event) => {
+          if (!shouldCaptureKey(event)) {
+            return;
+          }
+          event.preventDefault();
+          if (event.target !== canvas) {
+            handleKeyUp(event);
           }
         }, { passive: false });
 
