@@ -735,9 +735,7 @@
         }
 
         if (event.key === "r" || event.key === "R") {
-          if (state.gameOver) {
-            resetGame();
-          }
+          resetGame();
           event.preventDefault();
           return;
         }
@@ -1349,34 +1347,53 @@
           bindMobileTouchControls();
         }
 
+        const keyboardCaptureKeys = new Set([
+          "ArrowLeft",
+          "ArrowRight",
+          "ArrowUp",
+          "ArrowDown",
+          " ",
+          "Space",
+          "Shift",
+          "Control",
+          "c",
+          "C",
+          "p",
+          "P",
+          "o",
+          "O",
+          "l",
+          "L",
+          "k",
+          "K",
+          "r",
+          "R",
+          "f",
+          "F",
+        ]);
+
+        const shouldCaptureKey = (event) => {
+          return keyboardCaptureKeys.has(event.key) || keyboardCaptureKeys.has(event.code);
+        };
+
         window.addEventListener("keydown", (event) => {
-          const playingKeys = [
-            "ArrowLeft",
-            "ArrowRight",
-            "ArrowUp",
-            "ArrowDown",
-            " ",
-            "Space",
-            "Shift",
-            "Control",
-            "c",
-            "C",
-            "p",
-            "P",
-            "o",
-            "O",
-            "l",
-            "L",
-            "k",
-            "K",
-            "r",
-            "R",
-            "f",
-            "F",
-          ];
-          if (playingKeys.includes(event.key) || playingKeys.includes(event.code)) {
-            event.preventDefault();
+          if (!shouldCaptureKey(event)) {
+            return;
+          }
+          event.preventDefault();
+          if (event.target !== canvas) {
             canvas.focus();
+            handleKeyDown(event);
+          }
+        }, { passive: false });
+
+        window.addEventListener("keyup", (event) => {
+          if (!shouldCaptureKey(event)) {
+            return;
+          }
+          event.preventDefault();
+          if (event.target !== canvas) {
+            handleKeyUp(event);
           }
         }, { passive: false });
 
