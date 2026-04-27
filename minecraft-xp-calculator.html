@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>麥塊等級差經驗值計算器</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f4f6f8;
+        color: #1f2937;
+      }
+
+      .container {
+        max-width: 900px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.5rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 10px;
+        align-items: center;
+      }
+
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #9ca3af;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 1rem;
+      }
+
+      .actions {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+        justify-content: flex-end;
+      }
+
+      button {
+        border: 1px solid #2563eb;
+        background: #2563eb;
+        color: #fff;
+        border-radius: 8px;
+        padding: 8px 14px;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #fff;
+        color: #1d4ed8;
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: 170px 1fr;
+        row-gap: 8px;
+      }
+
+      pre {
+        margin: 0;
+        background: #111827;
+        color: #f9fafb;
+        border-radius: 8px;
+        min-height: 280px;
+        max-height: 420px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        padding: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <section class="card">
+        <h1>麥塊等級差經驗值計算器</h1>
+        <form id="xp-form" class="grid">
+          <label for="start-level">起始等級:</label>
+          <input id="start-level" name="start-level" type="number" min="0" max="100000" value="0" required />
+
+          <label for="target-level">目標等級:</label>
+          <input id="target-level" name="target-level" type="number" min="0" max="100000" value="30" required />
+        </form>
+        <div class="actions">
+          <button id="calc-btn" type="submit" form="xp-form">計算</button>
+          <button id="clear-btn" class="secondary" type="button">清空明細</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>結果</h2>
+        <div class="result-grid">
+          <div>等級差:</div>
+          <div id="level-gap">-</div>
+
+          <div>需要總經驗值:</div>
+          <div id="total-xp">-</div>
+
+          <div>起始等級升一級:</div>
+          <div id="start-next">-</div>
+
+          <div>目標前一級升一級:</div>
+          <div id="target-prev">-</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>逐級明細</h2>
+        <pre id="details"></pre>
+      </section>
+    </div>
+
+    <script>
+      const MAX_LEVEL = 100000;
+      const MAX_DETAIL_ROWS = 500;
+
+      const form = document.getElementById("xp-form");
+      const clearBtn = document.getElementById("clear-btn");
+      const detailsEl = document.getElementById("details");
+
+      const levelGapEl = document.getElementById("level-gap");
+      const totalXpEl = document.getElementById("total-xp");
+      const startNextEl = document.getElementById("start-next");
+      const targetPrevEl = document.getElementById("target-prev");
+
+      function xpToNextLevel(level) {
+        if (level < 0) {
+          throw new Error("level must be >= 0");
+        }
+        if (level <= 15) return 2 * level + 7;
+        if (level <= 30) return 5 * level - 38;
+        return 9 * level - 158;
+      }
+
+      function totalXpForLevel(level) {
+        if (level < 0) {
+          throw new Error("level must be >= 0");
+        }
+        if (level <= 16) return level * level + 6 * level;
+        if (level <= 31) return Math.floor((5 * level * level - 81 * level + 720) / 2);
+        return Math.floor((9 * level * level - 325 * level + 4440) / 2);
+      }
+
+      function parseLevel(value, fieldName) {
+        const level = Number.parseInt(String(value).trim(), 10);
+        if (Number.isNaN(level)) {
+          throw new Error(`${fieldName} 必須是整數`);
+        }
+        if (level < 0) {
+          throw new Error(`${fieldName} 不能小於 0`);
+        }
+        if (level > MAX_LEVEL) {
+          throw new Error(`${fieldName} 不能大於 ${MAX_LEVEL}`);
+        }
+        return level;
+      }
+
+      function renderDetails(startLevel, targetLevel) {
+        detailsEl.textContent = "";
+
+        if (startLevel === targetLevel) {
+          detailsEl.textContent = "起始等級和目標等級相同，不需要額外經驗值。\n";
+          return;
+        }
+
+        const lines = [];
+        const displayedTarget = Math.min(targetLevel, startLevel + MAX_DETAIL_ROWS);
+        let cumulative = 0;
+
+        for (let lv = startLevel; lv < displayedTarget; lv += 1) {
+          const need = xpToNextLevel(lv);
+          cumulative += need;
+          lines.push(`Lv.${lv} -> Lv.${lv + 1}: ${need} XP (累計 ${cumulative})`);
+        }
+
+        if (displayedTarget < targetLevel) {
+          const remaining = totalXpForLevel(targetLevel) - totalXpForLevel(displayedTarget);
+          lines.push(`... 省略 ${targetLevel - displayedTarget} 級，共 ${remaining} XP`);
+          lines.push(`總計: ${cumulative + remaining} XP`);
+        } else {
+          lines.push(`總計: ${cumulative} XP`);
+        }
+
+        detailsEl.textContent = `${lines.join("\n")}\n`;
+      }
+
+      function calculate() {
+        try {
+          const startLevel = parseLevel(form.elements["start-level"].value, "起始等級");
+          const targetLevel = parseLevel(form.elements["target-level"].value, "目標等級");
+
+          if (targetLevel < startLevel) {
+            throw new Error("目標等級必須大於或等於起始等級");
+          }
+
+          const levelGap = targetLevel - startLevel;
+          const totalXp = totalXpForLevel(targetLevel) - totalXpForLevel(startLevel);
+
+          levelGapEl.textContent = `${levelGap} 級`;
+          totalXpEl.textContent = `${totalXp} XP`;
+          startNextEl.textContent = `${xpToNextLevel(startLevel)} XP`;
+          targetPrevEl.textContent = targetLevel === 0 ? "N/A" : `${xpToNextLevel(targetLevel - 1)} XP`;
+
+          renderDetails(startLevel, targetLevel);
+        } catch (error) {
+          window.alert(error.message);
+        }
+      }
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        calculate();
+      });
+
+      clearBtn.addEventListener("click", () => {
+        detailsEl.textContent = "";
+      });
+
+      calculate();
+    </script>
+  </body>
+</html>
