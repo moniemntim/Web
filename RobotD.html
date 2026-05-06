@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RobotD CSV 分類分析工具</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3fb;
+      --panel: #ffffff;
+      --panel-soft: #f7faff;
+      --line: #d8e1ef;
+      --text: #172033;
+      --muted: #657187;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #b42318;
+      --warning-bg: #fff8e6;
+      --warning-line: #f7d070;
+      --shadow: 0 14px 34px rgba(31, 41, 55, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(37, 99, 235, 0.14), transparent 28rem),
+        radial-gradient(circle at 90% 15%, rgba(14, 165, 233, 0.12), transparent 24rem),
+        var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      line-height: 1.5;
+    }
+
+    .app {
+      width: min(100% - 28px, 1240px);
+      margin: 24px auto;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: clamp(26px, 4vw, 38px);
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(216, 225, 239, 0.85);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .file-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      padding: 10px 12px;
+    }
+
+    .file-box strong { white-space: nowrap; }
+
+    #fileName {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--muted);
+    }
+
+    input[type="file"] {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    button,
+    .file-button {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+    }
+
+    button:hover,
+    .file-button:hover { background: var(--primary-dark); }
+    button:active,
+    .file-button:active { transform: translateY(1px); }
+
+    .secondary {
+      background: #e8eef8;
+      color: #23324a;
+    }
+
+    .secondary:hover { background: #dbe5f3; }
+
+    .summary {
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      font-weight: 650;
+      white-space: pre-line;
+    }
+
+    .notice {
+      display: none;
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--warning-line);
+      border-radius: 14px;
+      background: var(--warning-bg);
+      color: #6f4e00;
+      white-space: pre-line;
+    }
+
+    .notice.error {
+      border-color: #f1a5a0;
+      background: #fff0ef;
+      color: var(--danger);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(520px, 1.15fr) minmax(360px, 0.85fr);
+      gap: 14px;
+    }
+
+    fieldset {
+      min-width: 0;
+      margin: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+    }
+
+    legend {
+      padding: 0 8px;
+      font-weight: 800;
+      color: #25344f;
+    }
+
+    .right-stack {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      max-height: 610px;
+    }
+
+    .short { max-height: 265px; }
+    .medium { max-height: 315px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #edf1f7;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #f1f5fb;
+      color: #34435e;
+      font-weight: 800;
+    }
+
+    tr[data-center] { cursor: pointer; }
+    tbody tr:hover { background: #f8fbff; }
+    tr.selected { background: #eaf2ff !important; }
+
+    .empty {
+      padding: 24px 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .detail-title {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .help {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .hero { align-items: flex-start; flex-direction: column; }
+      .toolbar { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .table-wrap { max-height: 430px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <h1>RobotD</h1>
+        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；支援瀏覽器本機分析，不上傳檔案）</p>
+      </div>
+    </header>
+
+    <section class="toolbar card" aria-label="CSV 檔案工具列">
+      <div class="file-box">
+        <strong>CSV 檔案：</strong>
+        <span id="fileName">尚未選擇檔案</span>
+      </div>
+      <label class="file-button" for="csvInput">瀏覽...</label>
+      <input id="csvInput" type="file" accept=".csv,text/csv" />
+      <button id="analyzeBtn" type="button">開始分析</button>
+      <button id="clearBtn" type="button" class="secondary">清空</button>
+    </section>
+
+    <section id="summary" class="summary card">請先選擇 CSV 檔案，再按「開始分析」。</section>
+    <section id="notice" class="notice" role="alert"></section>
+
+    <section class="grid">
+      <fieldset>
+        <legend>分類統計（100~340，範圍 ±5）</legend>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>層數</th>
+                <th>分類值</th>
+                <th>次數</th>
+                <th>最多值</th>
+                <th>最多次數</th>
+                <th>最小值</th>
+                <th>最大值</th>
+                <th>震幅量</th>
+              </tr>
+            </thead>
+            <tbody id="bucketBody">
+              <tr><td colspan="8" class="empty">尚未分析</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </fieldset>
+
+      <div class="right-stack">
+        <fieldset>
+          <legend>層數數值明細</legend>
+          <p id="detailTitle" class="detail-title">點選左側層數查看數值明細。</p>
+          <div class="table-wrap short">
+            <table>
+              <thead>
+                <tr>
+                  <th>數值</th>
+                  <th>數量</th>
+                  <th>占比</th>
+                </tr>
+              </thead>
+              <tbody id="valueBody">
+                <tr><td colspan="3" class="empty">尚未選擇層數</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>震幅過大（與上一筆 &lt;5 分鐘且差值 &lt; ±5.0）</legend>
+          <div class="table-wrap medium">
+            <table>
+              <thead>
+                <tr>
+                  <th>上一筆時間</th>
+                  <th>上一筆數值</th>
+                  <th>目前時間</th>
+                  <th>目前數值</th>
+                  <th>間隔(分)</th>
+                  <th>差值</th>
+                </tr>
+              </thead>
+              <tbody id="eventBody">
+                <tr><td colspan="6" class="empty">尚未分析</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+      </div>
+    </section>
+
+    <p class="help">CSV 欄位順序需為：日期、時間、數值。第一列若為 Date/Time 或 日期/時間標題會自動略過。</p>
+  </main>
+
+  <script>
+    const CLASS_CENTERS = Array.from({ length: 25 }, (_, index) => 100 + index * 10);
+    const CLASS_TOLERANCE = 5.0;
+    const AMP_INTERVAL_MINUTES = 5.0;
+    const AMP_DIFF_THRESHOLD = 5.0;
+
+    const state = {
+      file: null,
+      analysisResult: null,
+      selectedCenter: null,
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function parseTimestamp(dateText, timeText) {
+      const dateParts = dateText.split("/").map((x) => Number.parseInt(x, 10));
+      const timeParts = timeText.split(":").map((x) => Number.parseInt(x, 10));
+
+      if (
+        dateParts.length !== 3 ||
+        timeParts.length !== 3 ||
+        dateParts.some(Number.isNaN) ||
+        timeParts.some(Number.isNaN)
+      ) {
+        throw new Error("日期時間格式錯誤");
+      }
+
+      const [year, month, day] = dateParts;
+      const [hour, minute, second] = timeParts;
+      const timestamp = new Date(year, month - 1, day, hour, minute, second);
+
+      if (
+        timestamp.getFullYear() !== year ||
+        timestamp.getMonth() !== month - 1 ||
+        timestamp.getDate() !== day ||
+        timestamp.getHours() !== hour ||
+        timestamp.getMinutes() !== minute ||
+        timestamp.getSeconds() !== second
+      ) {
+        throw new Error("日期時間格式錯誤");
+      }
+
+      return timestamp;
+    }
+
+    function classifyValue(value) {
+      const nearest = CLASS_CENTERS.reduce((best, center) => {
+        const bestDistance = Math.abs(value - best);
+        const distance = Math.abs(value - center);
+        return distance < bestDistance || (distance === bestDistance && center < best) ? center : best;
+      }, CLASS_CENTERS[0]);
+
+      return Math.abs(value - nearest) <= CLASS_TOLERANCE ? nearest : null;
+    }
+
+    function normalizeValueKey(value) {
+      return Math.round(value * 1_000_000) / 1_000_000;
+    }
+
+    function formatValue(value) {
+      const text = Number(value).toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+      return text || "0";
+    }
+
+    function formatFixedOrDash(value) {
+      return value === null || value === undefined ? "-" : Number(value).toFixed(1);
+    }
+
+    function formatDateTime(date) {
+      const pad = (value) => String(value).padStart(2, "0");
+      return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function parseCsvLine(line) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        const next = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === "," && !inQuotes) {
+          result.push(current);
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+
+      result.push(current);
+      return result;
+    }
+
+    function readRecords(csvText) {
+      const records = [];
+      const errors = [];
+      const text = csvText.replace(/^\uFEFF/, "");
+      const rows = text.split(/\r\n|\n|\r/);
+
+      rows.forEach((line, index) => {
+        const rowIndex = index + 1;
+        if (!line.trim()) return;
+
+        const row = parseCsvLine(line);
+        if (row.length < 3) {
+          errors.push(`第 ${rowIndex} 行：欄位數不足（需要 3 欄）`);
+          return;
+        }
+
+        const dateText = row[0].trim();
+        const timeText = row[1].trim();
+        const valueText = row[2].trim();
+
+        if (
+          rowIndex === 1 &&
+          ["date", "日期"].includes(dateText.toLowerCase()) &&
+          ["time", "時間"].includes(timeText.toLowerCase())
+        ) {
+          return;
+        }
+
+        if (!dateText || !timeText || !valueText) {
+          errors.push(`第 ${rowIndex} 行：有空白欄位`);
+          return;
+        }
+
+        try {
+          const timestamp = parseTimestamp(dateText, timeText);
+          const value = Number(valueText);
+          if (!Number.isFinite(value)) throw new Error("數值格式錯誤");
+          records.push({ timestamp, value, rowNumber: rowIndex, bucket: null });
+        } catch (error) {
+          errors.push(`第 ${rowIndex} 行：${error.message || error}`);
+        }
+      });
+
+      return { records, errors };
+    }
+
+    function createBucketStats() {
+      return Object.fromEntries(CLASS_CENTERS.map((center) => [center, {
+        count: 0,
+        min: null,
+        max: null,
+        freq: new Map(),
+        modeValues: [],
+        modeCount: 0,
+      }]));
+    }
+
+    function analyze(records) {
+      const bucketStats = createBucketStats();
+
+      records.forEach((record) => {
+        const bucket = classifyValue(record.value);
+        record.bucket = bucket;
+        if (bucket === null) return;
+
+        const stats = bucketStats[bucket];
+        stats.count += 1;
+        stats.min = stats.min === null ? record.value : Math.min(stats.min, record.value);
+        stats.max = stats.max === null ? record.value : Math.max(stats.max, record.value);
+
+        const valueKey = normalizeValueKey(record.value);
+        stats.freq.set(valueKey, (stats.freq.get(valueKey) || 0) + 1);
+      });
+
+      CLASS_CENTERS.forEach((center) => {
+        const stats = bucketStats[center];
+        if (!stats.freq.size) return;
+
+        stats.modeCount = Math.max(...stats.freq.values());
+        stats.modeValues = [...stats.freq.entries()]
+          .filter(([, count]) => count === stats.modeCount)
+          .map(([value]) => value)
+          .sort((a, b) => a - b);
+      });
+
+      const amplitudeEvents = [];
+      for (let i = 1; i < records.length; i += 1) {
+        const prevRecord = records[i - 1];
+        const currentRecord = records[i];
+        const deltaMinutes = (currentRecord.timestamp - prevRecord.timestamp) / 60000;
+        const deltaValue = currentRecord.value - prevRecord.value;
+
+        if (
+          deltaMinutes >= 0 &&
+          deltaMinutes < AMP_INTERVAL_MINUTES &&
+          Math.abs(deltaValue) < AMP_DIFF_THRESHOLD
+        ) {
+          amplitudeEvents.push({
+            prevTs: prevRecord.timestamp,
+            prevValue: prevRecord.value,
+            currTs: currentRecord.timestamp,
+            currValue: currentRecord.value,
+            deltaMinutes,
+            deltaValue,
+          });
+        }
+      }
+
+      const counts = CLASS_CENTERS.map((center) => bucketStats[center].count);
+      const maxCount = counts.length ? Math.max(...counts) : 0;
+      const mostFrequent = CLASS_CENTERS.filter((center) => bucketStats[center].count === maxCount && maxCount > 0);
+      const values = records.map((record) => record.value);
+      const globalMin = values.length ? Math.min(...values) : null;
+      const globalMax = values.length ? Math.max(...values) : null;
+      const classifiedCount = CLASS_CENTERS.reduce((total, center) => total + bucketStats[center].count, 0);
+
+      return {
+        bucketStats,
+        mostFrequent,
+        maxCount,
+        globalMin,
+        globalMax,
+        totalCount: records.length,
+        classifiedCount,
+        unclassifiedCount: records.length - classifiedCount,
+        amplitudeEvents,
+      };
+    }
+
+    function showNotice(message, isError = false) {
+      const notice = $("notice");
+      notice.textContent = message;
+      notice.classList.toggle("error", isError);
+      notice.style.display = message ? "block" : "none";
+    }
+
+    function setEmptyRow(tbody, colSpan, text) {
+      tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty">${text}</td></tr>`;
+    }
+
+    function renderValueDetail(center, layer) {
+      const valueBody = $("valueBody");
+      const result = state.analysisResult;
+      valueBody.innerHTML = "";
+
+      if (!result) {
+        setEmptyRow(valueBody, 3, "尚未分析");
+        return;
+      }
+
+      const stats = result.bucketStats[center];
+      $("detailTitle").textContent = `第 ${layer} 層 / 分類值 ${center}：共 ${stats.count} 筆，${stats.freq.size} 種數值`;
+
+      if (!stats.freq.size) {
+        setEmptyRow(valueBody, 3, "此分類沒有資料");
+        return;
+      }
+
+      [...stats.freq.entries()].sort((a, b) => a[0] - b[0]).forEach(([value, count]) => {
+        const percent = stats.count ? (count / stats.count) * 100 : 0;
+        const row = document.createElement("tr");
+        row.innerHTML = `<td>${formatValue(value)}</td><td>${count}</td><td>${percent.toFixed(1)}%</td>`;
+        valueBody.appendChild(row);
+      });
+    }
+
+    function renderResult(result) {
+      state.analysisResult = result;
+      state.selectedCenter = null;
+
+      const bucketBody = $("bucketBody");
+      bucketBody.innerHTML = "";
+
+      CLASS_CENTERS.forEach((center, index) => {
+        const layer = index + 1;
+        const stats = result.bucketStats[center];
+        const ampText = stats.min === null || stats.max === null ? "-" : (stats.max - stats.min).toFixed(1);
+        const modeText = stats.modeValues.length ? stats.modeValues.map(formatValue).join(", ") : "-";
+        const modeCountText = stats.modeValues.length ? String(stats.modeCount) : "-";
+        const row = document.createElement("tr");
+        row.dataset.center = center;
+        row.dataset.layer = layer;
+        row.innerHTML = `
+          <td>${layer}</td>
+          <td>${center}</td>
+          <td>${stats.count}</td>
+          <td>${modeText}</td>
+          <td>${modeCountText}</td>
+          <td>${formatFixedOrDash(stats.min)}</td>
+          <td>${formatFixedOrDash(stats.max)}</td>
+          <td>${ampText}</td>
+        `;
+        row.addEventListener("click", () => {
+          bucketBody.querySelectorAll("tr.selected").forEach((selected) => selected.classList.remove("selected"));
+          row.classList.add("selected");
+          state.selectedCenter = center;
+          renderValueDetail(center, layer);
+        });
+        bucketBody.appendChild(row);
+      });
+
+      const eventBody = $("eventBody");
+      eventBody.innerHTML = "";
+      if (!result.amplitudeEvents.length) {
+        setEmptyRow(eventBody, 6, "沒有符合條件的震幅資料");
+      } else {
+        result.amplitudeEvents.forEach((event) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${formatDateTime(event.prevTs)}</td>
+            <td>${event.prevValue.toFixed(1)}</td>
+            <td>${formatDateTime(event.currTs)}</td>
+            <td>${event.currValue.toFixed(1)}</td>
+            <td>${event.deltaMinutes.toFixed(2)}</td>
+            <td>${event.deltaValue >= 0 ? "+" : ""}${event.deltaValue.toFixed(1)}</td>
+          `;
+          eventBody.appendChild(row);
+        });
+      }
+
+      $("detailTitle").textContent = "點選左側層數查看數值明細。";
+      setEmptyRow($("valueBody"), 3, "尚未選擇層數");
+
+      const mostText = result.mostFrequent.length
+        ? `${result.mostFrequent.join(", ")}（次數=${result.maxCount}）`
+        : "無";
+      const globalMinText = result.globalMin === null ? "無" : result.globalMin.toFixed(1);
+      const globalMaxText = result.globalMax === null ? "無" : result.globalMax.toFixed(1);
+
+      $("summary").textContent =
+        `總筆數: ${result.totalCount} | 已分類: ${result.classifiedCount} | 未分類: ${result.unclassifiedCount} | 出現次數最多分類值: ${mostText}\n` +
+        `整體最小值: ${globalMinText} | 整體最大值: ${globalMaxText} | 震幅過大筆數: ${result.amplitudeEvents.length}`;
+    }
+
+    function resetPage() {
+      state.file = null;
+      state.analysisResult = null;
+      state.selectedCenter = null;
+      $("csvInput").value = "";
+      $("fileName").textContent = "尚未選擇檔案";
+      $("summary").textContent = "請先選擇 CSV 檔案，再按「開始分析」。";
+      $("detailTitle").textContent = "點選左側層數查看數值明細。";
+      setEmptyRow($("bucketBody"), 8, "尚未分析");
+      setEmptyRow($("valueBody"), 3, "尚未選擇層數");
+      setEmptyRow($("eventBody"), 6, "尚未分析");
+      showNotice("");
+    }
+
+    $("csvInput").addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      state.file = file || null;
+      $("fileName").textContent = file ? file.name : "尚未選擇檔案";
+      showNotice("");
+    });
+
+    $("analyzeBtn").addEventListener("click", async () => {
+      if (!state.file) {
+        showNotice("請先選擇 CSV 檔案。", true);
+        return;
+      }
+
+      try {
+        const csvText = await state.file.text();
+        const { records, errors } = readRecords(csvText);
+        const result = analyze(records);
+        renderResult(result);
+
+        if (errors.length) {
+          const preview = errors.slice(0, 10).join("\n");
+          const more = errors.length <= 10 ? "" : `\n... 其餘 ${errors.length - 10} 行未顯示。`;
+          showNotice(`有部分資料列被略過（共 ${errors.length} 行）：\n${preview}${more}`);
+        } else {
+          showNotice("");
+        }
+      } catch (error) {
+        showNotice(`分析失敗：${error.message || error}`, true);
+      }
+    });
+
+    $("clearBtn").addEventListener("click", resetPage);
+  </script>
+</body>
+</html>
