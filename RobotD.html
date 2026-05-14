@@ -69,6 +69,7 @@
     .toolbar {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 10px;
       align-items: center;
       padding: 14px;
@@ -290,6 +291,7 @@
       <div>
         <h1>RobotD</h1>
         <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；可讀取專案內指定 CSV 或本機檔案）</p>
+        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；支援瀏覽器本機分析，不上傳檔案）</p>
       </div>
     </header>
 
@@ -313,6 +315,7 @@
     </section>
 
     <section id="summary" class="summary card">可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。</section>
+    <section id="summary" class="summary card">請先選擇 CSV 檔案，再按「開始分析」。</section>
     <section id="notice" class="notice" role="alert"></section>
 
     <section class="grid">
@@ -759,6 +762,9 @@
       $("csvInput").value = "";
       $("fileName").textContent = "尚未選擇檔案";
       $("summary").textContent = "可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。";
+      $("csvInput").value = "";
+      $("fileName").textContent = "尚未選擇檔案";
+      $("summary").textContent = "請先選擇 CSV 檔案，再按「開始分析」。";
       $("detailTitle").textContent = "點選左側層數查看數值明細。";
       setEmptyRow($("bucketBody"), 8, "尚未分析");
       setEmptyRow($("valueBody"), 3, "尚未選擇層數");
@@ -808,6 +814,19 @@
         $("fileName").textContent = `專案檔案：${csvPath}`;
       } catch (error) {
         showNotice(`無法讀取指定檔案：${error.message || error}。請確認檔案已提交到 GitHub 專案中的指定資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
+        const { records, errors } = readRecords(csvText);
+        const result = analyze(records);
+        renderResult(result);
+
+        if (errors.length) {
+          const preview = errors.slice(0, 10).join("\n");
+          const more = errors.length <= 10 ? "" : `\n... 其餘 ${errors.length - 10} 行未顯示。`;
+          showNotice(`有部分資料列被略過（共 ${errors.length} 行）：\n${preview}${more}`);
+        } else {
+          showNotice("");
+        }
+      } catch (error) {
+        showNotice(`分析失敗：${error.message || error}`, true);
       }
     });
 
