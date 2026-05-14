@@ -68,6 +68,7 @@
 
     .toolbar {
       display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
       grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 10px;
       align-items: center;
@@ -134,6 +135,38 @@
     }
 
     .secondary:hover { background: #dbe5f3; }
+
+    .repo-loader {
+      display: grid;
+      grid-template-columns: auto minmax(160px, 0.8fr) minmax(160px, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .repo-loader label {
+      font-weight: 800;
+      color: #25344f;
+      white-space: nowrap;
+    }
+
+    .repo-loader input {
+      width: 100%;
+      min-height: 42px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font: inherit;
+    }
+
+    .repo-loader .hint {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 13px;
+    }
 
     .summary {
       padding: 14px 16px;
@@ -246,6 +279,7 @@
     @media (max-width: 980px) {
       .hero { align-items: flex-start; flex-direction: column; }
       .toolbar { grid-template-columns: 1fr; }
+      .repo-loader { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       .table-wrap { max-height: 430px; }
     }
@@ -256,6 +290,7 @@
     <header class="hero">
       <div>
         <h1>RobotD</h1>
+        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；可讀取專案內指定 CSV 或本機檔案）</p>
         <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；支援瀏覽器本機分析，不上傳檔案）</p>
       </div>
     </header>
@@ -271,6 +306,15 @@
       <button id="clearBtn" type="button" class="secondary">清空</button>
     </section>
 
+    <section class="repo-loader card" aria-label="GitHub 專案指定檔案讀取">
+      <label for="repoFolderInput">專案資料夾：</label>
+      <input id="repoFolderInput" type="text" value="data" placeholder="例如：data 或 assets/csv" />
+      <input id="repoFileInput" type="text" value="RobotD.csv" placeholder="例如：RobotD.csv" />
+      <button id="loadRepoBtn" type="button" class="secondary">讀取指定檔案</button>
+      <div class="hint">放在 GitHub 專案中的 CSV 可用相對路徑讀取，例如 <strong>data/RobotD.csv</strong>。在 GitHub Pages 上請確認檔案已提交到該資料夾。</div>
+    </section>
+
+    <section id="summary" class="summary card">可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。</section>
     <section id="summary" class="summary card">請先選擇 CSV 檔案，再按「開始分析」。</section>
     <section id="notice" class="notice" role="alert"></section>
 
@@ -354,6 +398,7 @@
       file: null,
       analysisResult: null,
       selectedCenter: null,
+      sourceLabel: "",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -581,6 +626,36 @@
       notice.style.display = message ? "block" : "none";
     }
 
+    function buildRepoCsvPath() {
+      const folder = $("repoFolderInput").value.trim().replace(/^\/+|\/+$/g, "");
+      const fileName = $("repoFileInput").value.trim().replace(/^\/+/, "");
+
+      if (!fileName) {
+        throw new Error("請輸入要讀取的 CSV 檔名。");
+      }
+
+      return folder ? `${folder}/${fileName}` : fileName;
+    }
+
+    function runAnalysisFromText(csvText, sourceLabel) {
+      const { records, errors } = readRecords(csvText);
+      const result = analyze(records);
+      renderResult(result);
+      state.sourceLabel = sourceLabel;
+
+      if (sourceLabel) {
+        $("summary").textContent = `來源: ${sourceLabel}\n${$("summary").textContent}`;
+      }
+
+      if (errors.length) {
+        const preview = errors.slice(0, 10).join("\n");
+        const more = errors.length <= 10 ? "" : `\n... 其餘 ${errors.length - 10} 行未顯示。`;
+        showNotice(`有部分資料列被略過（共 ${errors.length} 行）：\n${preview}${more}`);
+      } else {
+        showNotice("");
+      }
+    }
+
     function setEmptyRow(tbody, colSpan, text) {
       tbody.innerHTML = `<tr><td colspan="${colSpan}" class="empty">${text}</td></tr>`;
     }
@@ -683,6 +758,10 @@
       state.file = null;
       state.analysisResult = null;
       state.selectedCenter = null;
+      state.sourceLabel = "";
+      $("csvInput").value = "";
+      $("fileName").textContent = "尚未選擇檔案";
+      $("summary").textContent = "可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。";
       $("csvInput").value = "";
       $("fileName").textContent = "尚未選擇檔案";
       $("summary").textContent = "請先選擇 CSV 檔案，再按「開始分析」。";
@@ -708,6 +787,33 @@
 
       try {
         const csvText = await state.file.text();
+        runAnalysisFromText(csvText, state.file.name);
+      } catch (error) {
+        showNotice(`分析失敗：${error.message || error}`, true);
+      }
+    });
+
+    $("loadRepoBtn").addEventListener("click", async () => {
+      let csvPath;
+      try {
+        csvPath = buildRepoCsvPath();
+      } catch (error) {
+        showNotice(error.message || String(error), true);
+        return;
+      }
+
+      showNotice(`正在讀取：${csvPath}`);
+
+      try {
+        const response = await fetch(csvPath, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`讀取失敗（HTTP ${response.status}）：${csvPath}`);
+        }
+        const csvText = await response.text();
+        runAnalysisFromText(csvText, csvPath);
+        $("fileName").textContent = `專案檔案：${csvPath}`;
+      } catch (error) {
+        showNotice(`無法讀取指定檔案：${error.message || error}。請確認檔案已提交到 GitHub 專案中的指定資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
         const { records, errors } = readRecords(csvText);
         const result = analyze(records);
         renderResult(result);
