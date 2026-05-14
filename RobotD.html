@@ -151,6 +151,7 @@
       white-space: nowrap;
     }
 
+    .repo-loader select {
     .repo-loader input {
       width: 100%;
       min-height: 42px;
@@ -290,8 +291,7 @@
     <header class="hero">
       <div>
         <h1>RobotD</h1>
-        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；可讀取專案內指定 CSV 或本機檔案）</p>
-        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；支援瀏覽器本機分析，不上傳檔案）</p>
+        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；可掃描 RobotD-data 內 CSV 或讀取本機檔案）</p>
       </div>
     </header>
 
@@ -306,6 +306,17 @@
       <button id="clearBtn" type="button" class="secondary">清空</button>
     </section>
 
+    <section class="repo-loader card" aria-label="RobotD-data 專案資料夾檔案讀取">
+      <label for="repoFileSelect">固定資料夾：RobotD-data</label>
+      <select id="repoFileSelect" disabled>
+        <option value="">尚未掃描到 CSV 檔案</option>
+      </select>
+      <button id="scanRepoBtn" type="button" class="secondary">重新掃描</button>
+      <button id="loadRepoBtn" type="button" class="secondary" disabled>讀取選取檔案</button>
+      <div class="hint">請將 CSV 放在 GitHub 專案的 <strong>RobotD-data</strong> 資料夾。網頁會掃描此固定資料夾，並將可讀取的 CSV 顯示在下拉選單，不需要手動輸入路徑。</div>
+    </section>
+
+    <section id="summary" class="summary card">可掃描 RobotD-data 後從下拉選單讀取 CSV，或選擇本機 CSV 後按「開始分析」。</section>
     <section class="repo-loader card" aria-label="GitHub 專案指定檔案讀取">
       <label for="repoFolderInput">專案資料夾：</label>
       <input id="repoFolderInput" type="text" value="data" placeholder="例如：data 或 assets/csv" />
@@ -393,12 +404,14 @@
     const CLASS_TOLERANCE = 5.0;
     const AMP_INTERVAL_MINUTES = 5.0;
     const AMP_DIFF_THRESHOLD = 5.0;
+    const ROBOTD_DATA_FOLDER = "RobotD-data";
 
     const state = {
       file: null,
       analysisResult: null,
       selectedCenter: null,
       sourceLabel: "",
+      repoFiles: [],
     };
 
     const $ = (id) => document.getElementById(id);
@@ -626,6 +639,106 @@
       notice.style.display = message ? "block" : "none";
     }
 
+    function isCsvFile(fileName) {
+      return /\.csv$/i.test(fileName);
+    }
+
+    function buildRepoCsvPath(fileName) {
+      const safeName = String(fileName || "").trim().replace(/^\/+/, "");
+
+      if (!safeName) {
+        throw new Error("請先從下拉選單選擇 CSV 檔案。");
+      }
+
+      return `${ROBOTD_DATA_FOLDER}/${safeName.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    function getGitHubContentsApiUrl() {
+      const host = window.location.hostname.toLowerCase();
+      if (!host.endsWith(".github.io")) return null;
+
+      const owner = host.replace(/\.github\.io$/, "");
+      const pathParts = window.location.pathname.split("/").filter(Boolean);
+      const repo = pathParts.length > 1 ? pathParts[0] : `${owner}.github.io`;
+
+      return `https://api.github.com/repos/${owner}/${repo}/contents/${ROBOTD_DATA_FOLDER}`;
+    }
+
+    async function readRepoManifest() {
+      const response = await fetch(`${ROBOTD_DATA_FOLDER}/files.json`, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`找不到 ${ROBOTD_DATA_FOLDER}/files.json`);
+      }
+
+      const manifest = await response.json();
+      const files = Array.isArray(manifest) ? manifest : manifest.files;
+      if (!Array.isArray(files)) {
+        throw new Error("files.json 格式需為陣列，或包含 files 陣列。");
+      }
+
+      return files.filter((fileName) => typeof fileName === "string" && isCsvFile(fileName));
+    }
+
+    async function scanRepoCsvFiles() {
+      const apiUrl = getGitHubContentsApiUrl();
+
+      if (apiUrl) {
+        const response = await fetch(apiUrl, { cache: "no-store" });
+        if (response.ok) {
+          const entries = await response.json();
+          return entries
+            .filter((entry) => entry.type === "file" && isCsvFile(entry.name))
+            .map((entry) => entry.name)
+            .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+        }
+      }
+
+      const manifestFiles = await readRepoManifest();
+      return manifestFiles.sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    }
+
+    function renderRepoFileOptions(files) {
+      const select = $("repoFileSelect");
+      const loadButton = $("loadRepoBtn");
+      select.innerHTML = "";
+      state.repoFiles = files;
+
+      if (!files.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = `RobotD-data 內沒有可讀取的 CSV 檔案`;
+        select.appendChild(option);
+        select.disabled = true;
+        loadButton.disabled = true;
+        return;
+      }
+
+      files.forEach((fileName) => {
+        const option = document.createElement("option");
+        option.value = fileName;
+        option.textContent = fileName;
+        select.appendChild(option);
+      });
+
+      select.disabled = false;
+      loadButton.disabled = false;
+    }
+
+    async function refreshRepoFileList() {
+      showNotice(`正在掃描 ${ROBOTD_DATA_FOLDER} 資料夾...`);
+      $("scanRepoBtn").disabled = true;
+      $("loadRepoBtn").disabled = true;
+
+      try {
+        const files = await scanRepoCsvFiles();
+        renderRepoFileOptions(files);
+        showNotice(files.length ? `已掃描 ${ROBOTD_DATA_FOLDER}：找到 ${files.length} 個 CSV 檔案。` : `${ROBOTD_DATA_FOLDER} 內沒有 CSV 檔案。`, !files.length);
+      } catch (error) {
+        renderRepoFileOptions([]);
+        showNotice(`無法掃描 ${ROBOTD_DATA_FOLDER}：${error.message || error}。若不是 GitHub Pages 網址，請新增 ${ROBOTD_DATA_FOLDER}/files.json 作為檔案清單。`, true);
+      } finally {
+        $("scanRepoBtn").disabled = false;
+      }
     function buildRepoCsvPath() {
       const folder = $("repoFolderInput").value.trim().replace(/^\/+|\/+$/g, "");
       const fileName = $("repoFileInput").value.trim().replace(/^\/+/, "");
@@ -761,6 +874,7 @@
       state.sourceLabel = "";
       $("csvInput").value = "";
       $("fileName").textContent = "尚未選擇檔案";
+      $("summary").textContent = "可掃描 RobotD-data 後從下拉選單讀取 CSV，或選擇本機 CSV 後按「開始分析」。";
       $("summary").textContent = "可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。";
       $("csvInput").value = "";
       $("fileName").textContent = "尚未選擇檔案";
@@ -793,6 +907,12 @@
       }
     });
 
+    $("scanRepoBtn").addEventListener("click", refreshRepoFileList);
+
+    $("loadRepoBtn").addEventListener("click", async () => {
+      let csvPath;
+      try {
+        csvPath = buildRepoCsvPath($("repoFileSelect").value);
     $("loadRepoBtn").addEventListener("click", async () => {
       let csvPath;
       try {
@@ -813,6 +933,7 @@
         runAnalysisFromText(csvText, csvPath);
         $("fileName").textContent = `專案檔案：${csvPath}`;
       } catch (error) {
+        showNotice(`無法讀取選取檔案：${error.message || error}。請確認 CSV 已提交到 GitHub 專案的 ${ROBOTD_DATA_FOLDER} 資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
         showNotice(`無法讀取指定檔案：${error.message || error}。請確認檔案已提交到 GitHub 專案中的指定資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
         const { records, errors } = readRecords(csvText);
         const result = analyze(records);
@@ -831,6 +952,7 @@
     });
 
     $("clearBtn").addEventListener("click", resetPage);
+    refreshRepoFileList();
   </script>
 </body>
 </html>
