@@ -66,7 +66,47 @@
       box-shadow: var(--shadow);
     }
 
-    button {
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .file-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      padding: 10px 12px;
+    }
+
+    .file-box strong { white-space: nowrap; }
+
+    #fileName {
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      color: var(--muted);
+    }
+
+    input[type="file"] {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    button,
+    .file-button {
       display: inline-flex;
       justify-content: center;
       align-items: center;
@@ -84,8 +124,10 @@
       user-select: none;
     }
 
-    button:hover { background: var(--primary-dark); }
-    button:active { transform: translateY(1px); }
+    button:hover,
+    .file-button:hover { background: var(--primary-dark); }
+    button:active,
+    .file-button:active { transform: translateY(1px); }
 
     .secondary {
       background: #e8eef8;
@@ -96,7 +138,7 @@
 
     .repo-loader {
       display: grid;
-      grid-template-columns: auto minmax(220px, 1fr) auto auto auto;
+      grid-template-columns: auto minmax(160px, 0.8fr) minmax(160px, 1fr) auto;
       gap: 10px;
       align-items: center;
       padding: 14px;
@@ -110,6 +152,7 @@
     }
 
     .repo-loader select {
+    .repo-loader input {
       width: 100%;
       min-height: 42px;
       padding: 9px 11px;
@@ -236,6 +279,7 @@
 
     @media (max-width: 980px) {
       .hero { align-items: flex-start; flex-direction: column; }
+      .toolbar { grid-template-columns: 1fr; }
       .repo-loader { grid-template-columns: 1fr; }
       .grid { grid-template-columns: 1fr; }
       .table-wrap { max-height: 430px; }
@@ -247,22 +291,42 @@
     <header class="hero">
       <div>
         <h1>RobotD</h1>
-        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；固定讀取 RobotD-data 內 CSV）</p>
+        <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；可掃描 RobotD-data 內 CSV 或讀取本機檔案）</p>
       </div>
     </header>
 
-    <section class="repo-loader card" aria-label="RobotD-data 固定資料夾檔案讀取">
+    <section class="toolbar card" aria-label="CSV 檔案工具列">
+      <div class="file-box">
+        <strong>CSV 檔案：</strong>
+        <span id="fileName">尚未選擇檔案</span>
+      </div>
+      <label class="file-button" for="csvInput">瀏覽...</label>
+      <input id="csvInput" type="file" accept=".csv,text/csv" />
+      <button id="analyzeBtn" type="button">開始分析</button>
+      <button id="clearBtn" type="button" class="secondary">清空</button>
+    </section>
+
+    <section class="repo-loader card" aria-label="RobotD-data 專案資料夾檔案讀取">
       <label for="repoFileSelect">固定資料夾：RobotD-data</label>
       <select id="repoFileSelect" disabled>
         <option value="">尚未掃描到 CSV 檔案</option>
       </select>
       <button id="scanRepoBtn" type="button" class="secondary">重新掃描</button>
       <button id="loadRepoBtn" type="button" class="secondary" disabled>讀取選取檔案</button>
-      <button id="clearBtn" type="button" class="secondary">清空</button>
-      <div class="hint">請將 CSV 放在 GitHub 專案的 <strong>RobotD-data</strong> 固定資料夾。網頁只會掃描此資料夾，並將可讀取的 CSV 顯示在下拉選單。</div>
+      <div class="hint">請將 CSV 放在 GitHub 專案的 <strong>RobotD-data</strong> 資料夾。網頁會掃描此固定資料夾，並將可讀取的 CSV 顯示在下拉選單，不需要手動輸入路徑。</div>
     </section>
 
-    <section id="summary" class="summary card">請先從 RobotD-data 下拉選單選擇 CSV，再按「讀取選取檔案」。</section>
+    <section id="summary" class="summary card">可掃描 RobotD-data 後從下拉選單讀取 CSV，或選擇本機 CSV 後按「開始分析」。</section>
+    <section class="repo-loader card" aria-label="GitHub 專案指定檔案讀取">
+      <label for="repoFolderInput">專案資料夾：</label>
+      <input id="repoFolderInput" type="text" value="data" placeholder="例如：data 或 assets/csv" />
+      <input id="repoFileInput" type="text" value="RobotD.csv" placeholder="例如：RobotD.csv" />
+      <button id="loadRepoBtn" type="button" class="secondary">讀取指定檔案</button>
+      <div class="hint">放在 GitHub 專案中的 CSV 可用相對路徑讀取，例如 <strong>data/RobotD.csv</strong>。在 GitHub Pages 上請確認檔案已提交到該資料夾。</div>
+    </section>
+
+    <section id="summary" class="summary card">可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。</section>
+    <section id="summary" class="summary card">請先選擇 CSV 檔案，再按「開始分析」。</section>
     <section id="notice" class="notice" role="alert"></section>
 
     <section class="grid">
@@ -332,7 +396,7 @@
       </div>
     </section>
 
-    <p class="help">CSV 固定放在 RobotD-data 資料夾；欄位順序需為：日期、時間、數值。第一列若為 Date/Time 或 日期/時間標題會自動略過。</p>
+    <p class="help">CSV 欄位順序需為：日期、時間、數值。第一列若為 Date/Time 或 日期/時間標題會自動略過。</p>
   </main>
 
   <script>
@@ -343,6 +407,7 @@
     const ROBOTD_DATA_FOLDER = "RobotD-data";
 
     const state = {
+      file: null,
       analysisResult: null,
       selectedCenter: null,
       sourceLabel: "",
@@ -578,23 +643,8 @@
       return /\.csv$/i.test(fileName);
     }
 
-    function normalizeRepoFileName(fileName) {
-      const safeName = String(fileName || "").trim().replace(/^\/+/, "");
-      const parts = safeName.split("/").filter(Boolean);
-
-      if (
-        !parts.length ||
-        parts.some((part) => part === "." || part === "..") ||
-        !isCsvFile(parts[parts.length - 1])
-      ) {
-        return null;
-      }
-
-      return parts.join("/");
-    }
-
     function buildRepoCsvPath(fileName) {
-      const safeName = normalizeRepoFileName(fileName);
+      const safeName = String(fileName || "").trim().replace(/^\/+/, "");
 
       if (!safeName) {
         throw new Error("請先從下拉選單選擇 CSV 檔案。");
@@ -603,7 +653,7 @@
       return `${ROBOTD_DATA_FOLDER}/${safeName.split("/").map(encodeURIComponent).join("/")}`;
     }
 
-    function getGitHubRepoInfo() {
+    function getGitHubContentsApiUrl() {
       const host = window.location.hostname.toLowerCase();
       if (!host.endsWith(".github.io")) return null;
 
@@ -611,77 +661,40 @@
       const pathParts = window.location.pathname.split("/").filter(Boolean);
       const repo = pathParts.length > 1 ? pathParts[0] : `${owner}.github.io`;
 
-      return { owner, repo };
+      return `https://api.github.com/repos/${owner}/${repo}/contents/${ROBOTD_DATA_FOLDER}`;
     }
 
-    async function fetchJson(url) {
-      const response = await fetch(url, { cache: "no-store" });
+    async function readRepoManifest() {
+      const response = await fetch(`${ROBOTD_DATA_FOLDER}/files.json`, { cache: "no-store" });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${url}`);
-      }
-      return response.json();
-    }
-
-    function uniqueSortedCsvFiles(files) {
-      return [...new Set(files.map(normalizeRepoFileName).filter(Boolean))]
-        .sort((a, b) => a.localeCompare(b, "zh-Hant"));
-    }
-
-    async function scanGitHubTreeCsvFiles(repoInfo) {
-      const repoUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`;
-      const repoData = await fetchJson(repoUrl);
-      const defaultBranch = encodeURIComponent(repoData.default_branch || "HEAD");
-      const treeUrl = `${repoUrl}/git/trees/${defaultBranch}?recursive=1`;
-      const treeData = await fetchJson(treeUrl);
-
-      if (!Array.isArray(treeData.tree)) {
-        throw new Error("GitHub Tree API 回傳格式不正確。");
+        throw new Error(`找不到 ${ROBOTD_DATA_FOLDER}/files.json`);
       }
 
-      const folderPrefix = `${ROBOTD_DATA_FOLDER}/`;
-      return uniqueSortedCsvFiles(treeData.tree
-        .filter((entry) => entry.type === "blob" && entry.path && entry.path.startsWith(folderPrefix) && isCsvFile(entry.path))
-        .map((entry) => entry.path.slice(folderPrefix.length)));
-    }
-
-    async function scanGitHubContentsCsvFiles(repoInfo) {
-      const apiUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/contents/${encodeURIComponent(ROBOTD_DATA_FOLDER)}`;
-      const entries = await fetchJson(apiUrl);
-
-      if (!Array.isArray(entries)) {
-        throw new Error("GitHub Contents API 回傳格式不正確。");
+      const manifest = await response.json();
+      const files = Array.isArray(manifest) ? manifest : manifest.files;
+      if (!Array.isArray(files)) {
+        throw new Error("files.json 格式需為陣列，或包含 files 陣列。");
       }
 
-      return uniqueSortedCsvFiles(entries
-        .filter((entry) => entry.type === "file" && isCsvFile(entry.name))
-        .map((entry) => entry.name));
+      return files.filter((fileName) => typeof fileName === "string" && isCsvFile(fileName));
     }
 
     async function scanRepoCsvFiles() {
-      const repoInfo = getGitHubRepoInfo();
-      if (!repoInfo) {
-        throw new Error("請透過 GitHub Pages 網址開啟此頁面，才能掃描固定資料夾。");
+      const apiUrl = getGitHubContentsApiUrl();
+
+      if (apiUrl) {
+        const response = await fetch(apiUrl, { cache: "no-store" });
+        if (response.ok) {
+          const entries = await response.json();
+          return entries
+            .filter((entry) => entry.type === "file" && isCsvFile(entry.name))
+            .map((entry) => entry.name)
+            .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+        }
       }
 
-      const results = await Promise.allSettled([
-        scanGitHubTreeCsvFiles(repoInfo),
-        scanGitHubContentsCsvFiles(repoInfo),
-      ]);
-      const files = uniqueSortedCsvFiles(results
-        .filter((result) => result.status === "fulfilled")
-        .flatMap((result) => result.value));
-
-      if (files.length) return files;
-
-      const errors = results
-        .filter((result) => result.status === "rejected")
-        .map((result) => result.reason?.message || String(result.reason));
-
-      if (errors.length === results.length) {
-        throw new Error(errors.join("；"));
-      }
-
-      return [];
+      const manifestFiles = await readRepoManifest();
+      return manifestFiles.sort((a, b) => a.localeCompare(b, "zh-Hant"));
     }
 
     function renderRepoFileOptions(files) {
@@ -719,13 +732,22 @@
       try {
         const files = await scanRepoCsvFiles();
         renderRepoFileOptions(files);
-        showNotice(files.length ? `已掃描 ${ROBOTD_DATA_FOLDER}：找到 ${files.length} 個 CSV 檔案。` : `${ROBOTD_DATA_FOLDER} 內沒有 CSV 檔案；請確認 .csv 已提交並等待 GitHub Pages 更新。`, !files.length);
+        showNotice(files.length ? `已掃描 ${ROBOTD_DATA_FOLDER}：找到 ${files.length} 個 CSV 檔案。` : `${ROBOTD_DATA_FOLDER} 內沒有 CSV 檔案。`, !files.length);
       } catch (error) {
         renderRepoFileOptions([]);
-        showNotice(`無法掃描 ${ROBOTD_DATA_FOLDER}：${error.message || error}。請確認 .csv 已提交到固定資料夾 ${ROBOTD_DATA_FOLDER}，並等待 GitHub Pages 更新。`, true);
+        showNotice(`無法掃描 ${ROBOTD_DATA_FOLDER}：${error.message || error}。若不是 GitHub Pages 網址，請新增 ${ROBOTD_DATA_FOLDER}/files.json 作為檔案清單。`, true);
       } finally {
         $("scanRepoBtn").disabled = false;
       }
+    function buildRepoCsvPath() {
+      const folder = $("repoFolderInput").value.trim().replace(/^\/+|\/+$/g, "");
+      const fileName = $("repoFileInput").value.trim().replace(/^\/+/, "");
+
+      if (!fileName) {
+        throw new Error("請輸入要讀取的 CSV 檔名。");
+      }
+
+      return folder ? `${folder}/${fileName}` : fileName;
     }
 
     function runAnalysisFromText(csvText, sourceLabel) {
@@ -846,10 +868,17 @@
     }
 
     function resetPage() {
+      state.file = null;
       state.analysisResult = null;
       state.selectedCenter = null;
       state.sourceLabel = "";
-      $("summary").textContent = "請先從 RobotD-data 下拉選單選擇 CSV，再按「讀取選取檔案」。";
+      $("csvInput").value = "";
+      $("fileName").textContent = "尚未選擇檔案";
+      $("summary").textContent = "可掃描 RobotD-data 後從下拉選單讀取 CSV，或選擇本機 CSV 後按「開始分析」。";
+      $("summary").textContent = "可按「讀取指定檔案」載入專案內 CSV，或選擇本機 CSV 後按「開始分析」。";
+      $("csvInput").value = "";
+      $("fileName").textContent = "尚未選擇檔案";
+      $("summary").textContent = "請先選擇 CSV 檔案，再按「開始分析」。";
       $("detailTitle").textContent = "點選左側層數查看數值明細。";
       setEmptyRow($("bucketBody"), 8, "尚未分析");
       setEmptyRow($("valueBody"), 3, "尚未選擇層數");
@@ -857,12 +886,37 @@
       showNotice("");
     }
 
+    $("csvInput").addEventListener("change", (event) => {
+      const [file] = event.target.files;
+      state.file = file || null;
+      $("fileName").textContent = file ? file.name : "尚未選擇檔案";
+      showNotice("");
+    });
+
+    $("analyzeBtn").addEventListener("click", async () => {
+      if (!state.file) {
+        showNotice("請先選擇 CSV 檔案。", true);
+        return;
+      }
+
+      try {
+        const csvText = await state.file.text();
+        runAnalysisFromText(csvText, state.file.name);
+      } catch (error) {
+        showNotice(`分析失敗：${error.message || error}`, true);
+      }
+    });
+
     $("scanRepoBtn").addEventListener("click", refreshRepoFileList);
 
     $("loadRepoBtn").addEventListener("click", async () => {
       let csvPath;
       try {
         csvPath = buildRepoCsvPath($("repoFileSelect").value);
+    $("loadRepoBtn").addEventListener("click", async () => {
+      let csvPath;
+      try {
+        csvPath = buildRepoCsvPath();
       } catch (error) {
         showNotice(error.message || String(error), true);
         return;
@@ -877,8 +931,23 @@
         }
         const csvText = await response.text();
         runAnalysisFromText(csvText, csvPath);
+        $("fileName").textContent = `專案檔案：${csvPath}`;
       } catch (error) {
         showNotice(`無法讀取選取檔案：${error.message || error}。請確認 CSV 已提交到 GitHub 專案的 ${ROBOTD_DATA_FOLDER} 資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
+        showNotice(`無法讀取指定檔案：${error.message || error}。請確認檔案已提交到 GitHub 專案中的指定資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
+        const { records, errors } = readRecords(csvText);
+        const result = analyze(records);
+        renderResult(result);
+
+        if (errors.length) {
+          const preview = errors.slice(0, 10).join("\n");
+          const more = errors.length <= 10 ? "" : `\n... 其餘 ${errors.length - 10} 行未顯示。`;
+          showNotice(`有部分資料列被略過（共 ${errors.length} 行）：\n${preview}${more}`);
+        } else {
+          showNotice("");
+        }
+      } catch (error) {
+        showNotice(`分析失敗：${error.message || error}`, true);
       }
     });
 
