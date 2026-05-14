@@ -66,7 +66,8 @@
       box-shadow: var(--shadow);
     }
 
-    button {
+    button,
+    .nav-button {
       display: inline-flex;
       justify-content: center;
       align-items: center;
@@ -82,10 +83,14 @@
       cursor: pointer;
       transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
       user-select: none;
+      text-decoration: none;
+      white-space: nowrap;
     }
 
-    button:hover { background: var(--primary-dark); }
-    button:active { transform: translateY(1px); }
+    button:hover,
+    .nav-button:hover { background: var(--primary-dark); }
+    button:active,
+    .nav-button:active { transform: translateY(1px); }
 
     .secondary {
       background: #e8eef8;
@@ -93,6 +98,10 @@
     }
 
     .secondary:hover { background: #dbe5f3; }
+
+    .nav-button.secondary:visited {
+      color: #23324a;
+    }
 
     .repo-loader {
       display: grid;
@@ -249,6 +258,7 @@
         <h1>RobotD</h1>
         <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；固定讀取 RobotD-data 內 CSV）</p>
       </div>
+      <a class="nav-button secondary" href="RobotDEX.html">查看數值圖表</a>
     </header>
 
     <section class="repo-loader card" aria-label="RobotD-data 固定資料夾檔案讀取">
@@ -829,23 +839,29 @@
     $("scanRepoBtn").addEventListener("click", refreshRepoFileList);
 
     $("loadRepoBtn").addEventListener("click", async () => {
-      let csvPath;
+      let requestPath;
+      let displayPath;
       try {
-        csvPath = buildRepoCsvPath($("repoFileSelect").value);
+        const selectedCsvPath = normalizeRepoCsvPath($("repoFileSelect").value);
+        if (!selectedCsvPath) {
+          throw new Error("請先從下拉選單選擇 CSV 檔案。");
+        }
+        requestPath = buildRepoCsvPath(selectedCsvPath);
+        displayPath = `${ROBOTD_DATA_FOLDER}/${selectedCsvPath}`;
       } catch (error) {
         showNotice(error.message || String(error), true);
         return;
       }
 
-      showNotice(`正在讀取：${csvPath}`);
+      showNotice(`正在讀取：${displayPath}`);
 
       try {
-        const response = await fetch(csvPath, { cache: "no-store" });
+        const response = await fetch(requestPath, { cache: "no-store" });
         if (!response.ok) {
-          throw new Error(`讀取失敗（HTTP ${response.status}）：${csvPath}`);
+          throw new Error(`讀取失敗（HTTP ${response.status}）：${displayPath}`);
         }
         const csvText = await response.text();
-        runAnalysisFromText(csvText, csvPath);
+        runAnalysisFromText(csvText, displayPath);
       } catch (error) {
         showNotice(`無法讀取選取檔案：${error.message || error}。請確認 CSV 已提交到 GitHub 專案的 ${ROBOTD_DATA_FOLDER} 資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
       }
