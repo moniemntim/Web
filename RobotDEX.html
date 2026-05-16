@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RobotDEX 日期範圍數值圖表工具</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #eef3fb;
+      --panel: #ffffff;
+      --panel-soft: #f7faff;
+      --line: #d8e1ef;
+      --text: #172033;
+      --muted: #657187;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #b42318;
+      --warning-bg: #fff8e6;
+      --warning-line: #f7d070;
+      --shadow: 0 14px 34px rgba(31, 41, 55, 0.10);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 15% 10%, rgba(37, 99, 235, 0.14), transparent 28rem),
+        radial-gradient(circle at 90% 15%, rgba(14, 165, 233, 0.12), transparent 24rem),
+        var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+      line-height: 1.5;
+    }
+
+    .app {
+      width: min(100% - 28px, 1240px);
+      margin: 24px auto;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-end;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: clamp(26px, 4vw, 38px);
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(216, 225, 239, 0.85);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    button,
+    .nav-button {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+      user-select: none;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    button:hover,
+    .nav-button:hover { background: var(--primary-dark); }
+    button:active,
+    .nav-button:active { transform: translateY(1px); }
+    button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+    .secondary {
+      background: #e8eef8;
+      color: #23324a;
+    }
+
+    .secondary:hover { background: #dbe5f3; }
+
+    .nav-button.secondary:visited { color: #23324a; }
+
+    .repo-loader {
+      display: grid;
+      grid-template-columns: auto minmax(220px, 1fr) auto minmax(150px, 0.55fr) auto minmax(150px, 0.55fr);
+      gap: 10px;
+      align-items: center;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .repo-loader label {
+      font-weight: 800;
+      color: #25344f;
+      white-space: nowrap;
+    }
+
+    .repo-loader select,
+    .repo-loader input[type="date"] {
+      width: 100%;
+      min-height: 42px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font: inherit;
+    }
+
+    .repo-loader .hint {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .repo-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      grid-column: 1 / -1;
+    }
+
+    .summary {
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      font-weight: 650;
+      white-space: pre-line;
+    }
+
+    .notice {
+      display: none;
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border: 1px solid var(--warning-line);
+      border-radius: 14px;
+      background: var(--warning-bg);
+      color: #6f4e00;
+      white-space: pre-line;
+    }
+
+    .notice.error {
+      border-color: #f1a5a0;
+      background: #fff0ef;
+      color: var(--danger);
+    }
+
+    .chart-container {
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chart-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .chart-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chart-actions button {
+      min-height: 36px;
+      padding: 8px 12px;
+      font-size: 14px;
+    }
+
+    .chart-hint {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 400px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+
+    .chart-wrap canvas { cursor: grab; }
+    .chart-wrap canvas:active { cursor: grabbing; }
+
+    .chart-empty {
+      position: absolute;
+      inset: 14px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .help {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 980px) {
+      .hero { align-items: flex-start; flex-direction: column; }
+      .repo-loader { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div>
+        <h1>RobotDEX</h1>
+        <p class="subtitle">日期範圍數值圖表工具（固定讀取 RobotD-data 內 CSV）</p>
+      </div>
+      <a class="nav-button secondary" href="RobotD.html">查看分類分析</a>
+    </header>
+
+    <section class="repo-loader card" aria-label="RobotD-data 固定資料夾檔案讀取與日期選擇">
+      <label for="repoFileSelect">固定資料夾：RobotD-data</label>
+      <select id="repoFileSelect" disabled>
+        <option value="">尚未掃描到 CSV 檔案</option>
+      </select>
+      <label for="startDate">開始日期</label>
+      <input type="date" id="startDate">
+      <label for="endDate">結束日期</label>
+      <input type="date" id="endDate">
+      <div class="repo-actions">
+        <button id="scanRepoBtn" type="button" class="secondary">重新掃描</button>
+        <button id="loadRepoBtn" type="button" class="secondary" disabled>讀取並繪圖</button>
+        <button id="clearBtn" type="button" class="secondary">清空</button>
+      </div>
+      <div class="hint">請先從 RobotD-data 下拉選單選擇 CSV，設定日期範圍，再按「讀取並繪圖」。最新資料請選擇最後日期。</div>
+    </section>
+
+    <section id="summary" class="summary card">請先從 RobotD-data 下拉選單選擇 CSV，設定日期範圍，再按「讀取並繪圖」。</section>
+    <section id="notice" class="notice" role="alert"></section>
+
+    <section class="chart-container card">
+      <div class="chart-toolbar" aria-label="圖表縮放與平移控制">
+        <div class="chart-actions">
+          <button id="zoomInBtn" type="button" class="secondary" disabled>放大</button>
+          <button id="zoomOutBtn" type="button" class="secondary" disabled>縮小</button>
+          <button id="panLeftBtn" type="button" class="secondary" disabled>往左</button>
+          <button id="panRightBtn" type="button" class="secondary" disabled>往右</button>
+          <button id="resetZoomBtn" type="button" class="secondary" disabled>重設縮放</button>
+        </div>
+        <div class="chart-hint">滑鼠滾輪縮放，拖曳圖表可左右滑動。</div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="valueChart" style="display: none;"></canvas>
+        <div id="chartEmpty" class="chart-empty">尚未繪圖</div>
+      </div>
+    </section>
+
+    <p class="help">CSV 固定放在 RobotD-data 資料夾；欄位順序需為：日期、時間、數值。第一列若為 Date/Time 或 日期/時間標題會自動略過。</p>
+  </main>
+
+  <script>
+    const ROBOTD_DATA_FOLDER = "RobotD-data";
+    const CHART_PAN_STEP_PX = 160;
+
+    const state = {
+      records: [],
+      filteredRecords: [],
+      sourceLabel: "",
+      repoCsvPaths: [],
+      chart: null,
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    function getChartControlButtons() {
+      return ["zoomInBtn", "zoomOutBtn", "panLeftBtn", "panRightBtn", "resetZoomBtn"].map($);
+    }
+
+    function hasZoomPluginControls() {
+      return Boolean(
+        state.chart &&
+        typeof state.chart.zoom === "function" &&
+        typeof state.chart.pan === "function" &&
+        typeof state.chart.resetZoom === "function" &&
+        typeof state.chart.zoomScale === "function"
+      );
+    }
+
+    function setChartControlsEnabled(enabled) {
+      const canUseControls = enabled && hasZoomPluginControls();
+      getChartControlButtons().forEach((button) => {
+        button.disabled = !canUseControls;
+      });
+    }
+
+    function zoomChart(factor) {
+      if (!hasZoomPluginControls()) return;
+      const xScale = state.chart.scales.x;
+      const points = state.chart.data.datasets[0]?.data || [];
+      if (!xScale || points.length <= 1) return;
+
+      const originalMin = points[0].x;
+      const originalMax = points[points.length - 1].x;
+      const currentMin = Number.isFinite(xScale.min) ? xScale.min : originalMin;
+      const currentMax = Number.isFinite(xScale.max) ? xScale.max : originalMax;
+      const originalRange = originalMax - originalMin;
+      const currentRange = currentMax - currentMin;
+      const minRange = getMinimumVisibleTimeRange(points, originalRange);
+      const nextRange = Math.max(minRange, Math.min(originalRange, currentRange / factor));
+
+      if (nextRange >= originalRange) {
+        state.chart.resetZoom();
+        return;
+      }
+
+      const center = (currentMin + currentMax) / 2;
+      let nextMin = center - nextRange / 2;
+      nextMin = Math.max(originalMin, Math.min(originalMax - nextRange, nextMin));
+      state.chart.zoomScale("x", { min: nextMin, max: nextMin + nextRange }, "default");
+    }
+
+    function panChart(deltaX) {
+      if (!hasZoomPluginControls()) return;
+      state.chart.pan({ x: deltaX }, undefined, "default");
+    }
+
+    function resetChartZoom() {
+      if (!hasZoomPluginControls()) return;
+      state.chart.resetZoom();
+    }
+
+    function parseTimestamp(dateText, timeText) {
+      const dateParts = dateText.split("/").map((x) => Number.parseInt(x, 10));
+      const timeParts = timeText.split(":").map((x) => Number.parseInt(x, 10));
+
+      if (
+        dateParts.length !== 3 ||
+        timeParts.length !== 3 ||
+        dateParts.some(Number.isNaN) ||
+        timeParts.some(Number.isNaN)
+      ) {
+        throw new Error("日期時間格式錯誤");
+      }
+
+      const [year, month, day] = dateParts;
+      const [hour, minute, second] = timeParts;
+      const timestamp = new Date(year, month - 1, day, hour, minute, second);
+
+      if (
+        timestamp.getFullYear() !== year ||
+        timestamp.getMonth() !== month - 1 ||
+        timestamp.getDate() !== day ||
+        timestamp.getHours() !== hour ||
+        timestamp.getMinutes() !== minute ||
+        timestamp.getSeconds() !== second
+      ) {
+        throw new Error("日期時間格式錯誤");
+      }
+
+      return timestamp;
+    }
+
+    function parseCsvLine(line) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        const next = line[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            current += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === "," && !inQuotes) {
+          result.push(current);
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+
+      result.push(current);
+      return result;
+    }
+
+    function readRecords(csvText) {
+      const records = [];
+      const errors = [];
+      const text = csvText.replace(/^\uFEFF/, "");
+      const rows = text.split(/\r\n|\n|\r/);
+
+      rows.forEach((line, index) => {
+        const rowIndex = index + 1;
+        if (!line.trim()) return;
+
+        const row = parseCsvLine(line);
+        if (row.length < 3) {
+          errors.push(`第 ${rowIndex} 行：欄位數不足（需要 3 欄）`);
+          return;
+        }
+
+        const dateText = row[0].trim();
+        const timeText = row[1].trim();
+        const valueText = row[2].trim();
+
+        if (
+          rowIndex === 1 &&
+          ["date", "日期"].includes(dateText.toLowerCase()) &&
+          ["time", "時間"].includes(timeText.toLowerCase())
+        ) {
+          return;
+        }
+
+        if (!dateText || !timeText || !valueText) {
+          errors.push(`第 ${rowIndex} 行：有空白欄位`);
+          return;
+        }
+
+        try {
+          const timestamp = parseTimestamp(dateText, timeText);
+          const value = Number(valueText);
+          if (!Number.isFinite(value)) throw new Error("數值格式錯誤");
+          records.push({ timestamp, value, rowNumber: rowIndex });
+        } catch (error) {
+          errors.push(`第 ${rowIndex} 行：${error.message || error}`);
+        }
+      });
+
+      records.sort((a, b) => a.timestamp - b.timestamp);
+      return { records, errors };
+    }
+
+    function pad2(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function formatInputDate(date) {
+      return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+    }
+
+    function formatDateTime(date) {
+      return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+    }
+
+    function formatAxisTime(value, rangeMs = 0) {
+      const date = new Date(Number(value));
+      if (Number.isNaN(date.getTime())) return "";
+
+      if (rangeMs <= 6 * 60 * 60 * 1000) {
+        return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+      }
+
+      if (rangeMs <= 2 * 24 * 60 * 60 * 1000) {
+        return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+      }
+
+      if (rangeMs <= 45 * 24 * 60 * 60 * 1000) {
+        return `${pad2(date.getMonth() + 1)}/${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+      }
+
+      return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}`;
+    }
+
+    function getMinimumVisibleTimeRange(points, originalRange) {
+      const gaps = [];
+
+      for (let index = 1; index < points.length; index += 1) {
+        const gap = points[index].x - points[index - 1].x;
+        if (gap > 0) gaps.push(gap);
+      }
+
+      const smallestGap = gaps.length ? Math.min(...gaps) : 60 * 1000;
+      const rangeForSeveralPoints = Math.max(60 * 1000, smallestGap * 4);
+      return Math.min(originalRange, rangeForSeveralPoints);
+    }
+
+    function formatRangeDate(dateText) {
+      return dateText ? dateText.replaceAll("-", "/") : "不限";
+    }
+
+    function getSelectedDateRange() {
+      const startDate = $("startDate").value;
+      const endDate = $("endDate").value;
+
+      if (startDate && endDate && startDate > endDate) {
+        throw new Error("開始日期不能晚於結束日期。");
+      }
+
+      return { startDate, endDate };
+    }
+
+    function syncDateInputsToRecords(records) {
+      const startInput = $("startDate");
+      const endInput = $("endDate");
+
+      if (!records.length) {
+        [startInput, endInput].forEach((input) => {
+          input.removeAttribute("min");
+          input.removeAttribute("max");
+        });
+        return;
+      }
+
+      const minDate = formatInputDate(records[0].timestamp);
+      const maxDate = formatInputDate(records[records.length - 1].timestamp);
+
+      [startInput, endInput].forEach((input) => {
+        input.min = minDate;
+        input.max = maxDate;
+      });
+
+      if (!startInput.value || startInput.value < minDate || startInput.value > maxDate) startInput.value = minDate;
+      if (!endInput.value || endInput.value < minDate || endInput.value > maxDate) endInput.value = maxDate;
+    }
+
+    function filterRecordsByDate(records, startDate, endDate) {
+      if (!startDate && !endDate) return records;
+
+      const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+      const end = endDate ? new Date(`${endDate}T23:59:59.999`) : null;
+
+      return records.filter((record) => {
+        if (start && record.timestamp < start) return false;
+        if (end && record.timestamp > end) return false;
+        return true;
+      });
+    }
+
+    function renderSummary() {
+      if (!state.sourceLabel) {
+        $("summary").textContent = "請先從 RobotD-data 下拉選單選擇 CSV，設定日期範圍，再按「讀取並繪圖」。";
+        return;
+      }
+
+      const { startDate, endDate } = getSelectedDateRange();
+      const lines = [
+        `來源: ${state.sourceLabel}`,
+        `日期範圍: ${formatRangeDate(startDate)} ~ ${formatRangeDate(endDate)}`,
+        `總筆數: ${state.records.length} | 篩選後筆數: ${state.filteredRecords.length}`,
+      ];
+
+      if (state.filteredRecords.length) {
+        const values = state.filteredRecords.map((record) => record.value);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const avg = values.reduce((total, value) => total + value, 0) / values.length;
+        const firstRecord = state.filteredRecords[0];
+        const lastRecord = state.filteredRecords[state.filteredRecords.length - 1];
+
+        lines.push(`時間: ${formatDateTime(firstRecord.timestamp)} ~ ${formatDateTime(lastRecord.timestamp)}`);
+        lines.push(`最小值: ${min.toFixed(1)} | 最大值: ${max.toFixed(1)} | 平均值: ${avg.toFixed(1)}`);
+      } else {
+        lines.push("選擇的日期範圍內沒有資料。");
+      }
+
+      $("summary").textContent = lines.join("\n");
+    }
+
+    function applyCurrentDateFilter() {
+      try {
+        const { startDate, endDate } = getSelectedDateRange();
+        state.filteredRecords = filterRecordsByDate(state.records, startDate, endDate);
+        renderChart(state.filteredRecords);
+        renderSummary();
+        showNotice("");
+        return true;
+      } catch (error) {
+        showNotice(error.message || String(error), true);
+        return false;
+      }
+    }
+
+    function renderChart(filteredRecords) {
+      const canvas = $("valueChart");
+      const empty = $("chartEmpty");
+
+      if (state.chart) {
+        state.chart.destroy();
+        state.chart = null;
+        setChartControlsEnabled(false);
+      }
+
+      if (!filteredRecords.length) {
+        canvas.style.display = "none";
+        empty.textContent = state.records.length ? "選擇的日期範圍內沒有資料" : "尚未繪圖";
+        empty.style.display = "grid";
+        setChartControlsEnabled(false);
+        return;
+      }
+
+      if (typeof Chart === "undefined") {
+        canvas.style.display = "none";
+        empty.textContent = "圖表套件尚未載入，請確認網路連線後重新整理。";
+        empty.style.display = "grid";
+        setChartControlsEnabled(false);
+        return;
+      }
+
+      canvas.style.display = "block";
+      empty.style.display = "none";
+
+      const data = filteredRecords.map((record) => ({
+        x: record.timestamp.getTime(),
+        y: record.value,
+      }));
+      const timeRange = data[data.length - 1].x - data[0].x;
+
+      state.chart = new Chart(canvas, {
+        type: "line",
+        data: {
+          datasets: [{
+            label: "數值",
+            data,
+            borderColor: "rgb(37, 99, 235)",
+            backgroundColor: "rgba(37, 99, 235, 0.1)",
+            fill: true,
+            stepped: "after",
+            tension: 0,
+            pointRadius: filteredRecords.length > 250 ? 0 : 2,
+            pointHoverRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            intersect: false,
+            mode: "index",
+          },
+          scales: {
+            x: {
+              type: "linear",
+              min: data[0].x,
+              max: data[data.length - 1].x,
+              title: {
+                display: true,
+                text: "時間"
+              },
+              ticks: {
+                maxTicksLimit: 12,
+                callback(value) {
+                  return formatAxisTime(value, this.max - this.min);
+                },
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: "數值"
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: "top"
+            },
+            zoom: {
+              limits: {
+                x: {
+                  min: data[0].x,
+                  max: data[data.length - 1].x,
+                  minRange: getMinimumVisibleTimeRange(data, timeRange),
+                },
+              },
+              pan: {
+                enabled: true,
+                mode: "x",
+                threshold: 8,
+              },
+              zoom: {
+                wheel: {
+                  enabled: true,
+                  speed: 0.08,
+                },
+                pinch: {
+                  enabled: true,
+                },
+                mode: "x",
+              }
+            },
+            tooltip: {
+              callbacks: {
+                title(items) {
+                  if (!items.length) return "";
+                  return formatDateTime(new Date(items[0].raw.x));
+                },
+                label(item) {
+                  return `數值: ${Number(item.raw.y).toFixed(1)}`;
+                },
+              },
+            }
+          }
+        }
+      });
+      setChartControlsEnabled(true);
+    }
+
+    function showNotice(message, isError = false) {
+      const notice = $("notice");
+      notice.textContent = message;
+      notice.classList.toggle("error", isError);
+      notice.style.display = message ? "block" : "none";
+    }
+
+    function isCsvPath(csvPath) {
+      return /\.csv$/i.test(csvPath);
+    }
+
+    function normalizeRepoCsvPath(csvPath) {
+      const safeName = String(csvPath || "").trim().replace(/^\/+/, "");
+      const parts = safeName.split("/").filter(Boolean);
+
+      if (
+        !parts.length ||
+        parts.some((part) => part === "." || part === "..") ||
+        !isCsvPath(parts[parts.length - 1])
+      ) {
+        return null;
+      }
+
+      return parts.join("/");
+    }
+
+    function buildRepoCsvPath(csvPath) {
+      const safeName = normalizeRepoCsvPath(csvPath);
+
+      if (!safeName) {
+        throw new Error("請先從下拉選單選擇 CSV 檔案。");
+      }
+
+      return `${ROBOTD_DATA_FOLDER}/${safeName.split("/").map(encodeURIComponent).join("/")}`;
+    }
+
+    function getGitHubRepoInfo() {
+      const host = window.location.hostname.toLowerCase();
+      if (!host.endsWith(".github.io")) return null;
+
+      const owner = host.replace(/\.github\.io$/, "");
+      const pathParts = window.location.pathname.split("/").filter(Boolean);
+      const repo = pathParts.length > 1 ? pathParts[0] : `${owner}.github.io`;
+
+      return { owner, repo };
+    }
+
+    async function fetchJson(url) {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${url}`);
+      }
+      return response.json();
+    }
+
+    function uniqueSortedCsvPaths(csvPaths) {
+      return [...new Set(csvPaths.map(normalizeRepoCsvPath).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "zh-Hant"));
+    }
+
+    async function scanGitHubTreeCsvPaths(repoInfo) {
+      const repoUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`;
+      const repoData = await fetchJson(repoUrl);
+      const defaultBranch = encodeURIComponent(repoData.default_branch || "HEAD");
+      const treeUrl = `${repoUrl}/git/trees/${defaultBranch}?recursive=1`;
+      const treeData = await fetchJson(treeUrl);
+
+      if (!Array.isArray(treeData.tree)) {
+        throw new Error("GitHub Tree API 回傳格式不正確。");
+      }
+
+      const folderPrefix = `${ROBOTD_DATA_FOLDER}/`;
+      return uniqueSortedCsvPaths(treeData.tree
+        .filter((entry) => entry.type === "blob" && entry.path && entry.path.startsWith(folderPrefix) && isCsvPath(entry.path))
+        .map((entry) => entry.path.slice(folderPrefix.length)));
+    }
+
+    async function scanRepoCsvPaths() {
+      const repoInfo = getGitHubRepoInfo();
+      if (!repoInfo) {
+        throw new Error("請透過 GitHub Pages 網址開啟此頁面，才能掃描固定資料夾。");
+      }
+
+      return scanGitHubTreeCsvPaths(repoInfo);
+    }
+
+    function renderRepoCsvOptions(csvPaths) {
+      const select = $("repoFileSelect");
+      const loadButton = $("loadRepoBtn");
+      select.innerHTML = "";
+      state.repoCsvPaths = csvPaths;
+
+      if (!csvPaths.length) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = `RobotD-data 內沒有可讀取的 CSV 檔案`;
+        select.appendChild(option);
+        select.disabled = true;
+        loadButton.disabled = true;
+        return;
+      }
+
+      csvPaths.forEach((csvPath) => {
+        const option = document.createElement("option");
+        option.value = csvPath;
+        option.textContent = csvPath;
+        select.appendChild(option);
+      });
+
+      select.disabled = false;
+      loadButton.disabled = false;
+    }
+
+    async function refreshRepoFileList() {
+      showNotice(`正在掃描 ${ROBOTD_DATA_FOLDER} 資料夾...`);
+      $("scanRepoBtn").disabled = true;
+      $("loadRepoBtn").disabled = true;
+
+      try {
+        const csvPaths = await scanRepoCsvPaths();
+        renderRepoCsvOptions(csvPaths);
+        showNotice(csvPaths.length ? `已掃描 ${ROBOTD_DATA_FOLDER}：找到 ${csvPaths.length} 個 CSV 檔案。` : `${ROBOTD_DATA_FOLDER} 內沒有 CSV 檔案；請確認 .csv 已提交並等待 GitHub Pages 更新。`, !csvPaths.length);
+      } catch (error) {
+        renderRepoCsvOptions([]);
+        showNotice(`無法掃描 ${ROBOTD_DATA_FOLDER}：${error.message || error}。請確認 .csv 已提交到固定資料夾 ${ROBOTD_DATA_FOLDER}，並等待 GitHub Pages 更新。`, true);
+      } finally {
+        $("scanRepoBtn").disabled = false;
+      }
+    }
+
+    async function loadAndRender() {
+      let requestPath;
+      let displayPath;
+      try {
+        const selectedCsvPath = normalizeRepoCsvPath($("repoFileSelect").value);
+        if (!selectedCsvPath) {
+          throw new Error("請先從下拉選單選擇 CSV 檔案。");
+        }
+        requestPath = buildRepoCsvPath(selectedCsvPath);
+        displayPath = `${ROBOTD_DATA_FOLDER}/${selectedCsvPath}`;
+      } catch (error) {
+        showNotice(error.message || String(error), true);
+        return;
+      }
+
+      try {
+        getSelectedDateRange();
+      } catch (error) {
+        showNotice(error.message || String(error), true);
+        return;
+      }
+
+      showNotice(`正在讀取：${displayPath}`);
+
+      try {
+        const response = await fetch(requestPath, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`讀取失敗（HTTP ${response.status}）：${displayPath}`);
+        }
+        const csvText = await response.text();
+        const { records, errors } = readRecords(csvText);
+        state.records = records;
+        state.sourceLabel = displayPath;
+        syncDateInputsToRecords(records);
+
+        if (!applyCurrentDateFilter()) return;
+
+        if (errors.length) {
+          const preview = errors.slice(0, 10).join("\n");
+          const more = errors.length <= 10 ? "" : `\n... 其餘 ${errors.length - 10} 行未顯示。`;
+          showNotice(`有部分資料列被略過（共 ${errors.length} 行）：\n${preview}${more}`);
+        } else {
+          showNotice("");
+        }
+      } catch (error) {
+        showNotice(`無法讀取選取檔案：${error.message || error}。請確認 CSV 已提交到 GitHub 專案的 ${ROBOTD_DATA_FOLDER} 資料夾，且網頁是透過 GitHub Pages / HTTP 伺服器開啟。`, true);
+      }
+    }
+
+    function resetPage() {
+      state.records = [];
+      state.filteredRecords = [];
+      state.sourceLabel = "";
+      if (state.chart) {
+        state.chart.destroy();
+        state.chart = null;
+      }
+      setChartControlsEnabled(false);
+      ["startDate", "endDate"].forEach((id) => {
+        const input = $(id);
+        input.value = "";
+        input.removeAttribute("min");
+        input.removeAttribute("max");
+      });
+      $("valueChart").style.display = "none";
+      $("chartEmpty").textContent = "尚未繪圖";
+      $("chartEmpty").style.display = "grid";
+      $("summary").textContent = "請先從 RobotD-data 下拉選單選擇 CSV，設定日期範圍，再按「讀取並繪圖」。";
+      showNotice("");
+    }
+
+    $("scanRepoBtn").addEventListener("click", refreshRepoFileList);
+    $("loadRepoBtn").addEventListener("click", loadAndRender);
+    $("clearBtn").addEventListener("click", resetPage);
+    $("zoomInBtn").addEventListener("click", () => zoomChart(1.25));
+    $("zoomOutBtn").addEventListener("click", () => zoomChart(0.8));
+    $("panLeftBtn").addEventListener("click", () => panChart(CHART_PAN_STEP_PX));
+    $("panRightBtn").addEventListener("click", () => panChart(-CHART_PAN_STEP_PX));
+    $("resetZoomBtn").addEventListener("click", resetChartZoom);
+    ["startDate", "endDate"].forEach((id) => {
+      $(id).addEventListener("change", () => {
+        if (state.records.length) applyCurrentDateFilter();
+      });
+    });
+    setChartControlsEnabled(false);
+    refreshRepoFileList();
+  </script>
+</body>
+</html>
