@@ -66,7 +66,8 @@
       box-shadow: var(--shadow);
     }
 
-    button {
+    button,
+    .nav-button {
       display: inline-flex;
       justify-content: center;
       align-items: center;
@@ -82,10 +83,14 @@
       cursor: pointer;
       transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
       user-select: none;
+      text-decoration: none;
+      white-space: nowrap;
     }
 
-    button:hover { background: var(--primary-dark); }
-    button:active { transform: translateY(1px); }
+    button:hover,
+    .nav-button:hover { background: var(--primary-dark); }
+    button:active,
+    .nav-button:active { transform: translateY(1px); }
 
     .secondary {
       background: #e8eef8;
@@ -93,6 +98,10 @@
     }
 
     .secondary:hover { background: #dbe5f3; }
+
+    .nav-button.secondary:visited {
+      color: #23324a;
+    }
 
     .repo-loader {
       display: grid;
@@ -249,6 +258,7 @@
         <h1>RobotD</h1>
         <p class="subtitle">CSV 分類分析工具（100~340，範圍 ±5；固定讀取 RobotD-data 內 CSV）</p>
       </div>
+      <a class="nav-button secondary" href="RobotDEX.html">查看數值圖表</a>
     </header>
 
     <section class="repo-loader card" aria-label="RobotD-data 固定資料夾檔案讀取">
@@ -259,7 +269,7 @@
       <button id="scanRepoBtn" type="button" class="secondary">重新掃描</button>
       <button id="loadRepoBtn" type="button" class="secondary" disabled>讀取選取檔案</button>
       <button id="clearBtn" type="button" class="secondary">清空</button>
-      <div class="hint">請將 CSV 放在 GitHub 專案的 <strong>RobotD-data</strong> 固定資料夾。網頁只會掃描此資料夾，並將可讀取的 CSV 顯示在下拉選單。</div>
+      <div class="hint">請先從 RobotD-data 下拉選單選擇 CSV，再按「讀取選取檔案」。最新資料請選擇最後日期。</div>
     </section>
 
     <section id="summary" class="summary card">請先從 RobotD-data 下拉選單選擇 CSV，再按「讀取選取檔案」。</section>

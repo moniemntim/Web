@@ -94,7 +94,6 @@
     .nav-button:hover { background: var(--primary-dark); }
     button:active,
     .nav-button:active { transform: translateY(1px); }
-    button:disabled { cursor: not-allowed; opacity: 0.45; }
 
     .secondary {
       background: #e8eef8;
@@ -103,7 +102,9 @@
 
     .secondary:hover { background: #dbe5f3; }
 
-    .nav-button.secondary:visited { color: #23324a; }
+    .nav-button.secondary:visited {
+      color: #23324a;
+    }
 
     .repo-loader {
       display: grid;
@@ -120,7 +121,17 @@
       white-space: nowrap;
     }
 
-    .repo-loader select,
+    .repo-loader select {
+      width: 100%;
+      min-height: 42px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font: inherit;
+    }
+
     .repo-loader input[type="date"] {
       width: 100%;
       min-height: 42px;
@@ -195,6 +206,11 @@
       font-size: 14px;
     }
 
+    .chart-actions button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
     .chart-hint {
       color: var(--muted);
       font-size: 13px;
@@ -209,8 +225,13 @@
       padding: 14px;
     }
 
-    .chart-wrap canvas { cursor: grab; }
-    .chart-wrap canvas:active { cursor: grabbing; }
+    .chart-wrap canvas {
+      cursor: grab;
+    }
+
+    .chart-wrap canvas:active {
+      cursor: grabbing;
+    }
 
     .chart-empty {
       position: absolute;
@@ -342,7 +363,9 @@
       const center = (currentMin + currentMax) / 2;
       let nextMin = center - nextRange / 2;
       nextMin = Math.max(originalMin, Math.min(originalMax - nextRange, nextMin));
-      state.chart.zoomScale("x", { min: nextMin, max: nextMin + nextRange }, "default");
+      const nextMax = nextMin + nextRange;
+
+      state.chart.zoomScale("x", { min: nextMin, max: nextMax }, "default");
     }
 
     function panChart(deltaX) {
@@ -540,8 +563,8 @@
         input.max = maxDate;
       });
 
-      if (!startInput.value || startInput.value < minDate || startInput.value > maxDate) startInput.value = minDate;
-      if (!endInput.value || endInput.value < minDate || endInput.value > maxDate) endInput.value = maxDate;
+      if (!startInput.value) startInput.value = minDate;
+      if (!endInput.value) endInput.value = maxDate;
     }
 
     function filterRecordsByDate(records, startDate, endDate) {
@@ -804,13 +827,33 @@
         .map((entry) => entry.path.slice(folderPrefix.length)));
     }
 
-    async function scanRepoCsvPaths() {
-      const repoInfo = getGitHubRepoInfo();
-      if (!repoInfo) {
-        throw new Error("請透過 GitHub Pages 網址開啟此頁面，才能掃描固定資料夾。");
+    async function scanManifestCsvPaths() {
+      const manifest = await fetchJson(`${ROBOTD_DATA_FOLDER}/files.json`);
+      const files = Array.isArray(manifest) ? manifest : manifest.files;
+
+      if (!Array.isArray(files)) {
+        throw new Error(`${ROBOTD_DATA_FOLDER}/files.json 格式不正確。`);
       }
 
-      return scanGitHubTreeCsvPaths(repoInfo);
+      return uniqueSortedCsvPaths(files);
+    }
+
+    async function scanRepoCsvPaths() {
+      const repoInfo = getGitHubRepoInfo();
+
+      if (repoInfo) {
+        try {
+          return await scanGitHubTreeCsvPaths(repoInfo);
+        } catch (githubError) {
+          try {
+            return await scanManifestCsvPaths();
+          } catch {
+            throw githubError;
+          }
+        }
+      }
+
+      return scanManifestCsvPaths();
     }
 
     function renderRepoCsvOptions(csvPaths) {
@@ -848,10 +891,10 @@
       try {
         const csvPaths = await scanRepoCsvPaths();
         renderRepoCsvOptions(csvPaths);
-        showNotice(csvPaths.length ? `已掃描 ${ROBOTD_DATA_FOLDER}：找到 ${csvPaths.length} 個 CSV 檔案。` : `${ROBOTD_DATA_FOLDER} 內沒有 CSV 檔案；請確認 .csv 已提交並等待 GitHub Pages 更新。`, !csvPaths.length);
+        showNotice(csvPaths.length ? `已掃描 ${ROBOTD_DATA_FOLDER}：找到 ${csvPaths.length} 個 CSV 檔案。` : `${ROBOTD_DATA_FOLDER} 內沒有 CSV 檔案；請確認 .csv 已提交，或更新 ${ROBOTD_DATA_FOLDER}/files.json。`, !csvPaths.length);
       } catch (error) {
         renderRepoCsvOptions([]);
-        showNotice(`無法掃描 ${ROBOTD_DATA_FOLDER}：${error.message || error}。請確認 .csv 已提交到固定資料夾 ${ROBOTD_DATA_FOLDER}，並等待 GitHub Pages 更新。`, true);
+        showNotice(`無法掃描 ${ROBOTD_DATA_FOLDER}：${error.message || error}。請透過 GitHub Pages 或本機 HTTP 伺服器開啟，並確認 CSV 已放在 ${ROBOTD_DATA_FOLDER}。`, true);
       } finally {
         $("scanRepoBtn").disabled = false;
       }
